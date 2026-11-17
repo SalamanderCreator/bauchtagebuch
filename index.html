@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bauchtagebuch</title>
+  <meta name="theme-color" content="#2f6b4f">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Bauchtagebuch">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="kopf">
+    <h1>Bauchtagebuch</h1>
+    <button type="button" id="sync_anzeige" class="sync_anzeige" title="Abgleich mit Google">☁ –</button>
+    <button type="button" id="einst_knopf" class="einst_knopf" aria-label="Einstellungen und Daten"
+      title="Einstellungen und Daten">⚙</button>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </header>
+
+  <main class="raster">
+    <!-- Eintragen -->
+    <section id="formular" class="karte" aria-labelledby="formular_titel">
+      <h2 id="formular_titel">Neuer Eintrag</h2>
+      <div class="typen" role="tablist" aria-label="Art des Eintrags">
+        <button type="button" data-typ="essen" class="typ essen">Essen</button>
+        <button type="button" data-typ="trinken" class="typ trinken">Trinken</button>
+        <button type="button" data-typ="symptom" class="typ symptom">Symptom</button>
+        <button type="button" data-typ="stuhl" class="typ stuhl">Stuhlgang</button>
+      </div>
+
+      <form id="form" autocomplete="off" novalidate>
+        <div class="zeile">
+          <label>Datum <input type="date" id="f_datum" required></label>
+          <label>Uhrzeit <span class="mit_knopf"><input type="time" id="f_zeit">
+            <button type="button" id="f_jetzt" class="klein">jetzt</button></span></label>
+        </div>
+
+        <!-- Essen / Trinken -->
+        <div class="nur essen trinken">
+          <label class="voll">Was? <span class="pflicht">*</span>
+            <textarea id="f_text" rows="2" placeholder="z. B. Brötchen, Butter, Käse"></textarea>
+          </label>
+          <div id="vorschlaege" class="vorschlaege" aria-label="Vorschläge"></div>
+          <div class="zeile">
+            <label>Menge <input type="text" id="f_menge" placeholder="z. B. 300 g, 0,3 l, 2 Stück"></label>
+            <label>kcal <input type="number" id="f_kcal" min="0" step="1" inputmode="numeric"
+              placeholder="leer = schätzen"></label>
+          </div>
+          <p id="kcal_hinweis" class="hinweis"></p>
+          <details id="f_mehr" class="mehr">
+            <summary>Mahlzeit (statt Uhrzeit)</summary>
+            <label>Mahlzeit <select id="f_mahlzeit"><option value="">–</option></select></label>
+          </details>
+        </div>
+
+        <!-- Symptom -->
+        <div class="nur symptom">
+          <fieldset>
+            <legend>Symptome <span class="pflicht">*</span></legend>
+            <div id="f_symptome" class="chips"></div>
+          </fieldset>
+          <fieldset>
+            <legend>Stärke</legend>
+            <div id="f_staerke" class="stufen"></div>
+            <p class="hinweis">1 = kaum spürbar, 5 = sehr stark</p>
+          </fieldset>
+        </div>
+
+        <!-- Stuhlgang -->
+        <div class="nur stuhl">
+          <fieldset>
+            <legend>Bristol-Skala <span class="pflicht">*</span></legend>
+            <div id="f_bristol" class="bristol"></div>
+          </fieldset>
+          <button type="button" id="f_kein" class="zweit">Kein Stuhlgang an diesem Tag</button>
+        </div>
+
+        <label class="voll notiz_feld">Notiz <input type="text" id="f_notiz"
+          placeholder="z. B. Stress, Periode, auswärts gegessen"></label>
+
+        <div class="knoepfe">
+          <button type="submit" id="f_speichern" class="haupt">Speichern</button>
+          <button type="button" id="f_abbrechen" class="zweit" hidden>Abbrechen</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Tagesansicht -->
+    <section id="tagesansicht" class="karte" aria-labelledby="tag_titel">
+      <div class="tagnav">
+        <button type="button" id="tag_zurueck" class="klein" aria-label="Vorheriger Tag">←</button>
+        <h2 id="tag_titel">Heute</h2>
+        <button type="button" id="tag_heute" class="klein">Heute</button>
+        <button type="button" id="tag_vor" class="klein" aria-label="Nächster Tag">→</button>
+      </div>
+      <p id="tag_summe" class="summe"></p>
+      <ol id="zeitleiste" class="zeitleiste"></ol>
+    </section>
+  </main>
+
+  <section class="karte breit" aria-labelledby="t14_titel">
+    <h2 id="t14_titel">Die letzten 14 Tage</h2>
+    <div id="vierzehn" class="vierzehn"></div>
+  </section>
+
+  <section class="karte breit" aria-labelledby="muster_titel">
+    <h2 id="muster_titel">Was taucht vor Beschwerden auf?</h2>
+    <p class="hinweis">Zutaten, nach denen 20 Minuten bis 8 Stunden später eine Beschwerde kam (Symptom oder
+      Stuhlgang Typ 1, 2, 6, 7). Nur Zutaten, die mindestens zweimal vorkommen.
+      <strong>Das ist ein Hinweis, keine Diagnose.</strong></p>
+    <table id="muster" class="muster">
+      <thead><tr><th>Zutat</th><th>danach Beschwerde</th><th class="balken_sp">Anteil</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <dialog id="einstellungen" class="einstellungen" aria-labelledby="daten_titel">
+    <div class="dialog_kopf">
+      <h2 id="daten_titel">Einstellungen und Daten</h2>
+      <button type="button" id="einst_zu" class="klein" aria-label="Schließen">✕</button>
+    </div>
+    <h3>Auswertung durch KI</h3>
+    <div class="datenzeile">
+      <label>Zeitraum <select id="d_zeitraum">
+        <option value="14">letzte 14 Tage</option>
+        <option value="30" selected>letzte 30 Tage</option>
+        <option value="90">letzte 90 Tage</option>
+        <option value="alles">alles</option>
+      </select></label>
+      <button type="button" id="d_ki" class="haupt">Für KI-Auswertung (.md)</button>
+      <button type="button" id="d_ki_kopieren" class="zweit">KI-Text kopieren</button>
+    </div>
+    <p class="hinweis">Die KI-Datei enthält eine fertige Anleitung, alle Einträge Tag für Tag und die
+      vorberechnete Häufung. Einfach bei Claude hochladen oder den kopierten Text einfügen.</p>
+    <h3>Export und Import</h3>
+    <div class="datenzeile">
+      <button type="button" id="d_json" class="zweit">Export JSON</button>
+      <button type="button" id="d_csv" class="zweit">Export CSV</button>
+      <label class="datei zweit">Import JSON <input type="file" id="d_import" accept=".json,application/json"></label>
+    </div>
+
+    <h3 id="abgleich_titel">Abgleich mit Google</h3>
+    <p class="hinweis">Damit Handy, PC und Uhr dieselben Daten haben. URL der Web-App und Schlüssel aus dem
+      Apps-Script-Projekt (Funktion <code>schluesselErzeugen</code>) eintragen.</p>
+    <div class="abgleich_felder">
+      <label>Web-App-URL <input type="url" id="a_url" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <label>Schlüssel <input type="password" id="a_schluessel" autocomplete="off"></label>
+    </div>
+    <div class="datenzeile">
+      <button type="button" id="a_speichern" class="haupt">Speichern und abgleichen</button>
+      <button type="button" id="a_jetzt" class="zweit">Jetzt abgleichen</button>
+    </div>
+    <p id="a_stand" class="hinweis"></p>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

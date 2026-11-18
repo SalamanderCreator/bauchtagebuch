@@ -14,6 +14,7 @@ const zustand = {
   bristol: null,
   kcalManuell: false,     // kcal selbst getippt
   vorlage: null,          // übernommener früherer Eintrag {text, menge, kcal}
+  rezept: null,           // gewähltes Rezept {id, name, kcal (pro Portion), zutaten, quelle}
   loeschBereit: null,     // ID, deren Löschen bestätigt werden muss
 };
 
@@ -53,6 +54,7 @@ function kcalText(e) {
       "kcal folgt");
   }
   if (e.kcalQuelle === "eigene") return `${e.kcal} kcal`;
+  if (e.kcalQuelle === "rezept") return el("span", { title: "laut Rezept" }, `${e.kcal} kcal`);
   if (e.kcalQuelle === "verlauf") return el("span", { title: "aus deinen früheren Einträgen" }, `≈ ${e.kcal} kcal`);
   if (e.kcalQuelle === "veraltet") return el("span", { class: "offen" }, `≈ ${e.kcal} kcal (Schätzung veraltet)`);
   return `≈ ${e.kcal} kcal`;
@@ -98,12 +100,20 @@ function formularAufbauen() {
       if (!zustand.kcalManuell) $("f_kcal").value = "";
       zustand.vorlage = null;
     }
+    if (zustand.rezept && $("f_text").value.trim() !== zustand.rezept.name) {
+      if (!zustand.kcalManuell) $("f_kcal").value = "";
+      zustand.rezept = null;
+    }
     vorschlaegeZeigen();
     kcalHinweis();
   });
   $("f_text").addEventListener("focus", vorschlaegeZeigen);
   $("f_menge").addEventListener("input", () => {
-    if (zustand.vorlage && !zustand.kcalManuell) {
+    if (zustand.rezept && !zustand.kcalManuell) {
+      // Rezept: kcal = kcal pro Portion × Portionen
+      const k = L.rezeptKcal(zustand.rezept, $("f_menge").value);
+      $("f_kcal").value = k === null ? "" : k;
+    } else if (zustand.vorlage && !zustand.kcalManuell) {
       // Menge geändert: nicht die alten kcal übernehmen, sondern neu bestimmen
       $("f_kcal").value = "";
       zustand.vorlage = null;
@@ -140,6 +150,7 @@ function formularLeeren() {
   zustand.bristol = null;
   zustand.kcalManuell = false;
   zustand.vorlage = null;
+  zustand.rezept = null;
   $("form").reset();
   $("f_datum").value = zustand.tag;
   $("f_zeit").value = L.jetztZeit();
@@ -168,6 +179,7 @@ function bearbeiten(e) {
     $("f_mahlzeit").value = e.mahlzeit || "";
     $("f_mehr").open = !!e.mahlzeit;
     zustand.kcalManuell = e.kcalQuelle === "eigene";
+    if (e.rezept) zustand.rezept = rezeptZuEintrag(e);
   } else if (e.typ === "symptom") {
     zustand.symptome = new Set(e.symptome || []);
     zustand.staerke = Number(e.staerke) || 3;
@@ -184,6 +196,28 @@ function bearbeiten(e) {
   $("formular").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+// Rezept eines gespeicherten Eintrags: aktuelle Fassung aus der Rezeptliste, sonst wie gespeichert
+function rezeptZuEintrag(e) {
+  return S.rezepte().find((r) => r.id === e.rezept.id) || { ...e.rezept, zutaten: e.zutaten || [] };
+}
+
+function rezeptAktiv(text) {
+  return zustand.rezept && zustand.typ === "essen" && text === zustand.rezept.name ? zustand.rezept : null;
+}
+
+function rezeptWaehlen(r) {
+  $("f_text").value = r.name;
+  const p = L.portionenLesen($("f_menge").value);
+  if (p === null || !$("f_menge").value.trim()) $("f_menge").value = "1 Portion";
+  zustand.rezept = r;
+  zustand.vorlage = null;
+  zustand.kcalManuell = false;
+  const k = L.rezeptKcal(r, $("f_menge").value);
+  $("f_kcal").value = k === null ? "" : k;
+  vorschlaegeZeigen();
+  kcalHinweis();
+}
+
 // Was passiert mit den kcal beim Speichern? (für Hinweis und Speichern gleich)
 function kcalPlan(neu) {
   const feld = $("f_kcal").value;
@@ -193,6 +227,11 @@ function kcalPlan(neu) {
     const gleich = alt.typ === neu.typ && (alt.text || "") === neu.text && (alt.menge || "") === neu.menge;
     const feldGleich = feld === (typeof alt.kcal === "number" ? String(alt.kcal) : "");
     if (gleich && feldGleich) return { kcal: alt.kcal, quelle: alt.kcalQuelle };
+  }
+  const rezept = rezeptAktiv(neu.text);
+  if (rezept) {
+    const k = L.rezeptKcal(rezept, neu.menge);
+    return k === null ? { kcal: null, quelle: "veraltet" } : { kcal: k, quelle: "rezept" };
   }
   if (zustand.vorlage && feld !== "" && zustand.vorlage.text === neu.text && zustand.vorlage.menge === neu.menge) {
     return { kcal: Number(feld), quelle: "verlauf" };
@@ -208,6 +247,19 @@ function kcalHinweis() {
   const text = $("f_text").value.trim();
   if (!text) { h.textContent = ""; return; }
   const p = kcalPlan({ typ: zustand.typ, text, menge: $("f_menge").value.trim() });
+  const rezept = rezeptAktiv(text);
+  if (rezept && p.quelle !== "eigene") {
+    const zut = `${rezept.zutaten.length} Zutaten kommen in die Auswertung`;
+    if (typeof rezept.kcal !== "number") {
+      h.textContent = `Rezept noch ohne kcal – Gemini schätzt sie. ${zut}.`;
+    } else if (p.quelle === "rezept") {
+      h.textContent = `Rezept: ${rezept.kcal} kcal je Portion × ${L.portionenText(L.portionenLesen($("f_menge").value))}` +
+        ` = ${p.kcal} kcal. ${zut}.`;
+    } else {
+      h.textContent = `Menge bitte als Portionen angeben (z. B. 1, 1,5, ½) – sonst schätzt Gemini. ${zut}.`;
+    }
+    return;
+  }
   if (p.quelle === "eigene") h.textContent = "Deine kcal werden nie überschrieben.";
   else if (p.quelle === "verlauf") h.textContent = `≈ ${p.kcal} kcal aus deinen früheren Einträgen.`;
   else if (zustand.bearbeite && p.kcal !== null) h.textContent = "";
@@ -220,17 +272,34 @@ function vorschlaegeZeigen() {
   if (!L.istEssen({ typ: zustand.typ })) return;
   const eingabe = $("f_text").value;
   const v = L.vorschlaege(S.eintraege(), zustand.typ, eingabe);
+  // Rezepte aus der Rezeptliste (nur Essen, ab 3 Buchstaben, nicht das schon gewählte)
+  if (zustand.typ === "essen") {
+    const schon = new Set(v.eintraege.map((g) => g.text.toLowerCase()));
+    for (const r of L.rezeptSuche(S.rezepte(), eingabe)) {
+      if (zustand.rezept && zustand.rezept.id === r.id) continue;
+      if (schon.has(r.name.toLowerCase())) continue;
+      box.append(el("button", {
+        type: "button", class: "vorschlag rezept", title: `Rezept: ${r.zutaten.join(", ")}`,
+        onclick: () => rezeptWaehlen(r),
+      }, "📖 ", r.name, el("small", {}, typeof r.kcal === "number" ? `${r.kcal} kcal/Portion` : "kcal folgt")));
+    }
+  }
   for (const g of v.eintraege) {
     const j = g.juengster;
     const info = [j.menge, typeof j.kcal === "number" ? `${j.kcal} kcal` : ""].filter(Boolean).join(" · ");
     box.append(el("button", {
-      type: "button", class: "vorschlag", title: g.text,
+      type: "button", class: `vorschlag${j.rezept ? " rezept" : ""}`, title: g.text,
       onclick: () => {
         $("f_text").value = g.text;
         $("f_menge").value = j.menge || "";
         $("f_kcal").value = typeof j.kcal === "number" ? j.kcal : "";
         zustand.kcalManuell = false;
-        zustand.vorlage = { text: g.text, menge: (j.menge || "").trim() };
+        zustand.rezept = j.rezept ? rezeptZuEintrag(j) : null;
+        zustand.vorlage = j.rezept ? null : { text: g.text, menge: (j.menge || "").trim() };
+        if (zustand.rezept) {   // Rezept: kcal neu aus der aktuellen Rezeptliste
+          const k = L.rezeptKcal(zustand.rezept, $("f_menge").value);
+          if (k !== null) $("f_kcal").value = k;
+        }
         vorschlaegeZeigen();
         kcalHinweis();
       },
@@ -261,7 +330,8 @@ async function speichern() {
   e.notiz = $("f_notiz").value.trim();
   if (!e.datum) return status("Bitte ein Datum angeben.", true);
   // Felder anderer Arten entfernen
-  for (const f of ["text", "menge", "mahlzeit", "kcal", "kcalQuelle", "symptome", "staerke", "bristol", "kein"]) delete e[f];
+  for (const f of ["text", "menge", "mahlzeit", "kcal", "kcalQuelle", "symptome", "staerke", "bristol", "kein",
+    "rezept", "zutaten"]) delete e[f];
   e.text = ""; e.menge = ""; e.mahlzeit = "";
 
   if (L.istEssen(e)) {
@@ -273,6 +343,11 @@ async function speichern() {
     const p = kcalPlan(e);
     if (p.kcal !== null) e.kcal = p.kcal;
     e.kcalQuelle = p.quelle;
+    const rezept = rezeptAktiv(e.text);
+    if (rezept) {
+      e.rezept = { id: rezept.id, name: rezept.name, kcal: rezept.kcal, quelle: rezept.quelle || "" };
+      e.zutaten = [...(rezept.zutaten || [])];
+    }
   } else if (typ === "symptom") {
     if (!zustand.symptome.size) return status("Bitte mindestens ein Symptom wählen.", true);
     if (!e.zeit) return status("Bitte eine Uhrzeit angeben.", true);
@@ -323,6 +398,7 @@ function zeitleisteZeigen() {
     let inhalt, meta = [];
     if (L.istEssen(e)) {
       inhalt = e.text;
+      if (e.zutaten && e.zutaten.length) meta.push(el("span", { class: "rezept_marke", title: e.zutaten.join(", ") }, "📖 Rezept"));
       if (e.menge) meta.push(e.menge);
       meta.push(kcalText(e));
     } else if (e.typ === "symptom") {
@@ -469,6 +545,70 @@ function datenAufbauen() {
   });
 }
 
+// ------------------------------------------------------------------ Rezepte
+
+function rezeptStand() {
+  const alle = S.rezepte();
+  const offen = S.rezepteAusstehend().length;
+  $("r_stand").textContent = alle.length
+    ? `${alle.length.toLocaleString("de-DE")} Rezepte gespeichert${offen ? `, ${offen} noch nicht bei Google` : ""}.`
+    : "Noch keine Rezepte.";
+}
+
+const gleichesRezept = (a, b) => a && b && a.name === b.name && a.kcal === b.kcal && !a.geloescht &&
+  JSON.stringify(a.zutaten || []) === JSON.stringify(b.zutaten || []);
+
+async function rezepteImportieren(datei) {
+  let liste;
+  try {
+    const d = JSON.parse(await datei.text());
+    liste = Array.isArray(d) ? d : d.rezepte;
+    if (!Array.isArray(liste)) throw new Error("keine Rezeptliste (rezepte_liste.json erwartet)");
+  } catch (err) {
+    return status(`Rezepte nicht lesbar: ${err.message}`, true);
+  }
+  const vorhanden = new Map(S.rezepte().map((r) => [r.id, r]));
+  const neu = [];
+  let gleich = 0, ungueltig = 0;
+  for (const r of liste) {
+    if (!r || !r.id || !r.name || !Array.isArray(r.zutaten)) { ungueltig++; continue; }
+    if (gleichesRezept(vorhanden.get(r.id), r)) { gleich++; continue; }
+    neu.push({ ...r, kcal: typeof r.kcal === "number" ? r.kcal : null, geaendert: new Date().toISOString() });
+  }
+  await S.rezepteUebernehmen(neu, false);
+  rezeptStand();
+  status(`Rezepte: ${neu.length} neu oder geändert, ${gleich} unverändert` +
+    (ungueltig ? `, ${ungueltig} ungültige übersprungen` : "") + ". Sie gehen beim Abgleich an Google.");
+  if (neu.length) {
+    const r = await A.abgleichen();
+    if (r && r.ok) status(`Rezepte: ${r.rezepteGesendet} an Google übertragen.`);
+    rezeptStand();
+  }
+}
+
+function rezepteAufbauen() {
+  rezeptStand();
+  $("r_import").addEventListener("change", async (ev) => {
+    const datei = ev.target.files[0];
+    ev.target.value = "";
+    if (datei) await rezepteImportieren(datei);
+  });
+  $("r_link_knopf").addEventListener("click", async () => {
+    const link = $("r_link").value.trim();
+    if (!link) return status("Bitte den Link eines HelloFresh-Rezepts einfügen.", true);
+    status("Rezept wird gelesen …");
+    try {
+      const r = await A.rezeptLink(link);
+      $("r_link").value = "";
+      rezeptStand();
+      status(`Rezept „${r.name}“ gespeichert: ${typeof r.kcal === "number" ? `${r.kcal} kcal je Portion`
+        : "kcal schätzt Gemini"}, ${r.zutaten.length} Zutaten.`);
+    } catch (err) {
+      status(`Rezept nicht übernommen: ${err.message}`, true);
+    }
+  });
+}
+
 // Import einer JSON-Datei (Export des alten oder dieses Bauchtagebuchs) mit Prüfung
 async function importieren(datei) {
   let liste;
@@ -588,6 +728,7 @@ async function abgleichAufbauen() {
       b.title = "Zuletzt abgeglichen " + z.zuletzt.toLocaleString("de-DE");
       $("a_stand").textContent = `Zuletzt abgeglichen: ${z.zuletzt.toLocaleString("de-DE")}`;
       if (z.empfangen) allesZeigen();   // Änderungen vom anderen Gerät anzeigen
+      rezeptStand();
     }
     if (z.art === "fehler") $("a_stand").textContent = `Letzter Versuch fehlgeschlagen: ${z.text}`;
   });
@@ -613,6 +754,7 @@ async function start() {
     status(`Speicher nicht verfügbar: ${err.message}`, true);
   }
   const nach = await nachschaetzen();
+  rezepteAufbauen();
   typWechseln("essen");
   formularLeeren();
   allesZeigen();
@@ -635,6 +777,6 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
 }
 
 // zum Testen in der Konsole
-window.bauchtagebuch = { L, S, A, zustand, importieren };
+window.bauchtagebuch = { L, S, A, zustand, importieren, rezepteImportieren };
 
 start();

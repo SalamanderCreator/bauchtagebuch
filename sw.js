@@ -2,7 +2,7 @@
 // Programmdateien: erst aus dem Netz (damit Änderungen sofort ankommen), ohne Netz aus dem Speicher.
 // Schriften von Google: einmal geladen, dann aus dem Speicher.
 // Der Abgleich mit Google Apps Script wird nie zwischengespeichert.
-const SPEICHER = "bauchtagebuch-v1";
+const SPEICHER = "bauchtagebuch-v2";
 const DATEIEN = [
   "./", "index.html", "style.css", "app.js", "logik.js", "speicher.js", "abgleich.js",
   "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png",

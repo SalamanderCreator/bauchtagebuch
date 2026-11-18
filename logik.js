@@ -222,6 +222,65 @@ export function zutaten(text) {
   });
 }
 
+// Zutaten eines Eintrags: bei Rezepten die gespeicherte Zutatenliste, sonst aus dem Text
+export function essZutaten(e) {
+  if (Array.isArray(e.zutaten) && e.zutaten.length) return e.zutaten;
+  return zutaten(e.text);
+}
+
+// ------------------------------------------------------------------ Rezepte
+
+export function normal(s) {
+  return String(s || "").toLowerCase().replace(/ß/g, "ss").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+// Rezepte, deren Name alle eingegebenen Wörter enthält (Wortanfang zählt mehr), beste zuerst
+export function rezeptSuche(rezepte, eingabe, max = 5) {
+  const text = String(eingabe || "");
+  if (text.includes(",") || normal(text).length < 3) return [];
+  const woerter = normal(text).split(" ").filter((w) => w.length >= 2);
+  if (!woerter.length) return [];
+  const treffer = [];
+  for (const r of rezepte) {
+    const n = normal(r.name);
+    if (!woerter.every((w) => n.includes(w))) continue;
+    const nw = n.split(" ");
+    let punkte = n.startsWith(woerter[0]) ? 3 : 0;
+    for (const w of woerter) if (nw.some((x) => x.startsWith(w))) punkte += 2;
+    if (n === normal(text)) punkte += 10;
+    treffer.push({ r, punkte, laenge: n.length });
+  }
+  return treffer.sort((a, b) => b.punkte - a.punkte || a.laenge - b.laenge).slice(0, max).map((t) => t.r);
+}
+
+const ZAHLWORT = { halbe: 0.5, halb: 0.5, eine: 1, ein: 1, einer: 1, zwei: 2, drei: 3, viertel: 0.25, "½": 0.5, "¼": 0.25, "¾": 0.75 };
+
+// Portionen aus dem Mengenfeld: leer = 1, "1,5", "1/2", "½ Portion", "2 Portionen". Andere Angaben → null
+export function portionenLesen(menge) {
+  const s = String(menge || "").trim().toLowerCase().replace(",", ".");
+  if (!s) return 1;
+  let m = s.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+)\s*(?:portion(?:en)?|port\.?)?$/);
+  if (m) return Number(m[1]) / Number(m[2]);
+  m = s.match(/^(\d+(?:\.\d+)?)\s*(?:portion(?:en)?|port\.?|teller|x)?$/);
+  if (m) return Number(m[1]);
+  m = s.match(/^([a-z½¼¾]+)\s*(?:portion(?:en)?|port\.?|teller)?$/);
+  if (m && ZAHLWORT[m[1]] !== undefined) return ZAHLWORT[m[1]];
+  return null;
+}
+
+export function portionenText(p) {
+  const z = Number.isInteger(p) ? String(p) : String(Math.round(p * 100) / 100).replace(".", ",");
+  return `${z} ${p === 1 ? "Portion" : "Portionen"}`;
+}
+
+// kcal für die eingetragene Menge eines Rezepts (null, wenn das Rezept keine kcal hat oder die Menge unklar ist)
+export function rezeptKcal(rezept, menge) {
+  const p = portionenLesen(menge);
+  if (!rezept || typeof rezept.kcal !== "number" || p === null) return null;
+  return Math.round(rezept.kcal * p);
+}
+
 // ------------------------------------------------------------------ Muster
 
 // Für jede Zutat: wie oft gegessen, wie oft 20 min–8 h danach eine Beschwerde
@@ -232,7 +291,7 @@ export function muster(eintraege) {
   for (const e of essen) {
     const t0 = zeitpunkt(e);
     const danach = beschwerden.some((b) => b - t0 >= FENSTER_VON_MIN && b - t0 <= FENSTER_BIS_MIN);
-    for (const z of zutaten(e.text)) {
+    for (const z of essZutaten(e)) {
       const k = z.toLowerCase();
       const s = stat.get(k) || { zutat: z, gegessen: 0, danach: 0 };
       s.gegessen++;
@@ -288,7 +347,7 @@ export function vorschlaege(eintraege, typ, eingabe) {
     const zaehler = new Map();
     for (const e of eintraege) {
       if (!istEssen(e)) continue;
-      for (const z of zutaten(e.text)) {
+      for (const z of essZutaten(e)) {
         const k = z.toLowerCase();
         const v = zaehler.get(k) || { zutat: z, anzahl: 0 };
         v.anzahl++;
@@ -354,7 +413,7 @@ export function kcalAusVerlauf(eintraege, eintrag) {
 // ------------------------------------------------------------------ Export
 
 export const CSV_SPALTEN = ["id", "datum", "zeit", "typ", "text", "menge", "mahlzeit", "kcal", "kcalQuelle",
-  "bristol", "kein", "symptome", "staerke", "notiz", "erstellt", "geaendert"];
+  "bristol", "kein", "symptome", "staerke", "notiz", "erstellt", "geaendert", "zutaten"];
 
 export function csv(eintraege) {
   const feld = (v) => {
@@ -407,6 +466,8 @@ export function kiExport(eintraege, von, bis) {
   z.push("- Stuhlgang nach Bristol-Skala: 1 harte Kügelchen, 2 klumpig und hart, 3 geformt und rissig (normal), " +
     "4 glatt und weich (normal), 5 weiche Stücke, 6 breiig (Durchfall), 7 flüssig.");
   z.push("- In Klammern stehen oft Rezepte: „1/4 von Eintopf (Zutaten …)“ = ein Viertel des ganzen Rezepts.");
+  z.push("- „(Rezept; Zutaten: …)“ = Gericht aus der Rezeptliste mit allen Zutaten (ohne Salz, Pfeffer, Wasser); " +
+    "die Menge ist dann die Zahl der Portionen.");
   z.push("");
   z.push("## Tage");
   for (const d of daten) {
@@ -420,7 +481,8 @@ export function kiExport(eintraege, von, bis) {
       const zeit = e.zeit || (e.mahlzeit ? `ca. ${wirksameZeit(e)}` : "–");
       const teile = [zeit];
       if (istEssen(e)) {
-        teile.push(TYP_NAME[e.typ] + (e.mahlzeit ? ` (${e.mahlzeit})` : ""), e.text);
+        teile.push(TYP_NAME[e.typ] + (e.mahlzeit ? ` (${e.mahlzeit})` : ""),
+          e.zutaten && e.zutaten.length ? `${e.text} (Rezept; Zutaten: ${e.zutaten.join(", ")})` : e.text);
         if (e.menge) teile.push(e.menge);
         teile.push(typeof e.kcal === "number"
           ? `${e.kcalQuelle === "eigene" ? "" : "≈"}${e.kcal} kcal` : "? kcal");

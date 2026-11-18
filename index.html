@@ -146,6 +146,19 @@
       <label class="datei zweit">Import JSON <input type="file" id="d_import" accept=".json,application/json"></label>
     </div>
 
+    <h3>Rezepte</h3>
+    <p class="hinweis">Beim Eintragen schlägt die App passende Rezepte vor: kcal pro Portion und alle Zutaten
+      für die Auswertung werden übernommen. <span id="r_stand"></span></p>
+    <div class="datenzeile">
+      <label class="datei zweit">Rezeptliste einlesen <input type="file" id="r_import" accept=".json,application/json"></label>
+    </div>
+    <div class="abgleich_felder">
+      <label>HelloFresh-Link <input type="url" id="r_link" placeholder="https://www.hellofresh.de/recipes/…"></label>
+    </div>
+    <div class="datenzeile">
+      <button type="button" id="r_link_knopf" class="zweit">Rezept hinzufügen</button>
+    </div>
+
     <h3 id="abgleich_titel">Abgleich mit Google</h3>
     <p class="hinweis">Damit Handy, PC und Uhr dieselben Daten haben. URL der Web-App und Schlüssel aus dem
       Apps-Script-Projekt (Funktion <code>schluesselErzeugen</code>) eintragen.</p>

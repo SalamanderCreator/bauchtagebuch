@@ -5,8 +5,11 @@
 const DB_NAME = "bauchtagebuch";
 const STORE = "eintraege";
 
+const REZ = "rezepte";
+
 let db = null;
 let alle = [];   // inkl. gelöschter
+let rezeptListe = [];   // Rezepte (kcal pro Portion + Zutaten), gleicher Abgleich wie die Einträge
 
 function anfrage(req) {
   return new Promise((ok, fehler) => {
@@ -17,17 +20,43 @@ function anfrage(req) {
 
 export async function oeffnen() {
   db = await new Promise((ok, fehler) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
       const d = req.result;
       if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, { keyPath: "id" });
       if (!d.objectStoreNames.contains("einstellungen")) d.createObjectStore("einstellungen");
+      if (!d.objectStoreNames.contains(REZ)) d.createObjectStore(REZ, { keyPath: "id" });
     };
     req.onsuccess = () => ok(req.result);
     req.onerror = () => fehler(req.error);
   });
   alle = await anfrage(db.transaction(STORE).objectStore(STORE).getAll());
+  rezeptListe = await anfrage(db.transaction(REZ).objectStore(REZ).getAll());
   return eintraege();
+}
+
+// ------------------------------------------------------------------ Rezepte
+
+export function rezepte() {
+  return rezeptListe.filter((r) => !r.geloescht);
+}
+
+// Viele Rezepte übernehmen. sync=false: noch an Google senden (Import), true: kommen von Google
+export async function rezepteUebernehmen(liste, sync) {
+  const tx = db.transaction(REZ, "readwrite");
+  const st = tx.objectStore(REZ);
+  const neu = new Map(rezeptListe.map((r) => [r.id, r]));
+  for (const r of liste) {
+    const x = { ...r, sync };
+    st.put(x);
+    neu.set(x.id, x);
+  }
+  await new Promise((ok, fehler) => { tx.oncomplete = ok; tx.onerror = () => fehler(tx.error); });
+  rezeptListe = [...neu.values()];
+}
+
+export function rezepteAusstehend() {
+  return rezeptListe.filter((r) => r.sync === false);
 }
 
 // Sichtbare Einträge (ohne gelöschte)
@@ -77,10 +106,11 @@ export function ausstehend() {
 //  gesendet  = die übertragenen Einträge (Stand beim Senden) → als abgeglichen markieren,
 //              sofern sie seitdem nicht erneut geändert wurden
 //  empfangen = Einträge vom Server → übernehmen, außer die lokale Fassung ist neuer und noch offen
-export async function abgleichAnwenden(gesendet, empfangen) {
-  const tx = db.transaction(STORE, "readwrite");
-  const st = tx.objectStore(STORE);
-  const nachId = new Map(alle.map((e) => [e.id, e]));
+export async function abgleichAnwenden(gesendet, empfangen, store = STORE) {
+  const liste = store === REZ ? rezeptListe : alle;
+  const tx = db.transaction(store, "readwrite");
+  const st = tx.objectStore(store);
+  const nachId = new Map(liste.map((e) => [e.id, e]));
   let geaendert = 0;
   for (const g of gesendet) {
     const lokal = nachId.get(g.id);
@@ -99,8 +129,12 @@ export async function abgleichAnwenden(gesendet, empfangen) {
     geaendert++;
   }
   await new Promise((ok, fehler) => { tx.oncomplete = ok; tx.onerror = () => fehler(tx.error); });
-  alle = [...nachId.values()];
+  if (store === REZ) rezeptListe = [...nachId.values()]; else alle = [...nachId.values()];
   return geaendert;
+}
+
+export function rezepteAbgleichAnwenden(gesendet, empfangen) {
+  return abgleichAnwenden(gesendet, empfangen, REZ);
 }
 
 // Alles aus der Datenbank neu lesen (für die Import-Prüfung)

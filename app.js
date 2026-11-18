@@ -51,7 +51,7 @@ function herunterladen(name, inhalt, mime) {
 
 function kcalText(e) {
   if (typeof e.kcal !== "number") {
-    return el("span", { class: "offen", title: "Gemini schätzt offene Einträge spätestens 30 Minuten nach dem Abgleich" },
+    return el("span", { class: "offen", title: "Gemini schätzt offene Einträge spätestens 15 Minuten nach dem Abgleich" },
       "kcal folgt");
   }
   if (e.kcalQuelle === "eigene") return `${e.kcal} kcal`;
@@ -265,7 +265,7 @@ function kcalHinweis() {
   if (p.quelle === "eigene") h.textContent = "Deine kcal werden nie überschrieben.";
   else if (p.quelle === "verlauf") h.textContent = `≈ ${p.kcal} kcal aus deinen früheren Einträgen.`;
   else if (zustand.bearbeite && p.kcal !== null) h.textContent = "";
-  else h.textContent = "Ohne kcal: Gemini schätzt sie spätestens 30 Minuten nach dem Abgleich (oder trag sie selbst ein).";
+  else h.textContent = "Ohne kcal: Gemini schätzt sie spätestens 15 Minuten nach dem Abgleich (oder trag sie selbst ein).";
 }
 
 function vorschlaegeZeigen() {

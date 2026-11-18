@@ -281,6 +281,24 @@ export function rezeptKcal(rezept, menge) {
   return Math.round(rezept.kcal * p);
 }
 
+// Kochplan-Einträge eines Tags mit ihrem Rezept aus der Rezeptliste (Varianten über die Nummer).
+// Rezepte, die (noch) nicht in der Liste sind, fallen weg; jedes Rezept nur einmal.
+export function geplantAm(geplant, rezepte, datum) {
+  const nachId = new Map(rezepte.map((r) => [r.id, r]));
+  const erg = [], gesehen = new Set();
+  for (const p of geplant || []) {
+    if (p.datum !== datum) continue;
+    let r = nachId.get(p.rezeptId);
+    if (r && Number.isInteger(p.variante) && r.varianten && r.varianten[p.variante]) {
+      r = nachId.get(r.varianten[p.variante]) || r;
+    }
+    if (!r || gesehen.has(r.id)) continue;
+    gesehen.add(r.id);
+    erg.push({ rezept: r, rest: !!p.rest, portionen: p.portionen });
+  }
+  return erg;
+}
+
 // ------------------------------------------------------------------ Muster
 
 // Für jede Zutat: wie oft gegessen, wie oft 20 min–8 h danach eine Beschwerde

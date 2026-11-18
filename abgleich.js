@@ -74,8 +74,14 @@ export async function abgleichen() {
       rezepte = await S.rezepteAbgleichAnwenden(rezGesendet, d.rezepte);
       neu.seitRezepte = d.jetztRezepte;
     }
+    let geplant = null;
+    if (Array.isArray(d.geplant)) {   // Kochplan der Rezepte-App (gestern bis übermorgen)
+      geplant = d.geplant;
+      await S.einstellung("geplant", geplant);
+    }
     await S.einstellung("abgleich", neu);
-    melden({ art: "ok", offen: S.ausstehend().length, gesendet: gesendet.length, empfangen, rezepte, zuletzt: new Date() });
+    melden({ art: "ok", offen: S.ausstehend().length, gesendet: gesendet.length, empfangen, rezepte, geplant,
+      zuletzt: new Date() });
     return { ok: true, gesendet: gesendet.length, empfangen, rezepte, rezepteGesendet: rezGesendet.length };
   } catch (err) {
     // TypeError = keine Verbindung (Funkloch, Flugmodus): Einträge bleiben offen und gehen später raus

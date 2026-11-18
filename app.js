@@ -15,6 +15,7 @@ const zustand = {
   kcalManuell: false,     // kcal selbst getippt
   vorlage: null,          // übernommener früherer Eintrag {text, menge, kcal}
   rezept: null,           // gewähltes Rezept {id, name, kcal (pro Portion), zutaten, quelle}
+  geplant: [],            // Kochplan der Rezepte-App [{datum, rezeptId, variante, portionen, rest}]
   loeschBereit: null,     // ID, deren Löschen bestätigt werden muss
 };
 
@@ -90,6 +91,7 @@ function formularAufbauen() {
 
   document.querySelectorAll(".typ").forEach((b) => b.addEventListener("click", () => typWechseln(b.dataset.typ)));
   $("f_jetzt").addEventListener("click", () => { $("f_zeit").value = L.jetztZeit(); });
+  $("f_datum").addEventListener("change", vorschlaegeZeigen);   // Kochplan des gewählten Tags
   $("form").addEventListener("submit", (ev) => { ev.preventDefault(); speichern(); });
   $("f_abbrechen").addEventListener("click", () => formularLeeren());
   $("f_kein").addEventListener("click", keinStuhlgang);
@@ -272,6 +274,17 @@ function vorschlaegeZeigen() {
   if (!L.istEssen({ typ: zustand.typ })) return;
   const eingabe = $("f_text").value;
   const v = L.vorschlaege(S.eintraege(), zustand.typ, eingabe);
+  // Kochplan der Rezepte-App für das Datum im Formular (nur solange noch nichts getippt ist)
+  if (zustand.typ === "essen" && !eingabe.trim()) {
+    const datum = $("f_datum").value || L.heute();
+    for (const g of L.geplantAm(zustand.geplant, S.rezepte(), datum)) {
+      box.append(el("button", {
+        type: "button", class: "vorschlag rezept geplant", title: `Im Kochplan: ${g.rezept.zutaten.join(", ")}`,
+        onclick: () => rezeptWaehlen(g.rezept),
+      }, g.rest ? "🗓 Reste: " : "🗓 Geplant: ", g.rezept.name,
+        el("small", {}, typeof g.rezept.kcal === "number" ? `${g.rezept.kcal} kcal/Portion` : "kcal folgt")));
+    }
+  }
   // Rezepte aus der Rezeptliste (nur Essen, ab 3 Buchstaben, nicht das schon gewählte)
   if (zustand.typ === "essen") {
     const schon = new Set(v.eintraege.map((g) => g.text.toLowerCase()));
@@ -556,7 +569,7 @@ function rezeptStand() {
 }
 
 const gleichesRezept = (a, b) => a && b && a.name === b.name && a.kcal === b.kcal && !a.geloescht &&
-  JSON.stringify(a.zutaten || []) === JSON.stringify(b.zutaten || []);
+  JSON.stringify([a.zutaten || [], a.varianten || []]) === JSON.stringify([b.zutaten || [], b.varianten || []]);
 
 async function rezepteImportieren(datei) {
   let liste;
@@ -729,6 +742,8 @@ async function abgleichAufbauen() {
       $("a_stand").textContent = `Zuletzt abgeglichen: ${z.zuletzt.toLocaleString("de-DE")}`;
       if (z.empfangen) allesZeigen();   // Änderungen vom anderen Gerät anzeigen
       rezeptStand();
+      if (z.geplant) { zustand.geplant = z.geplant; vorschlaegeZeigen(); }
+      else if (z.rezepte) vorschlaegeZeigen();
     }
     if (z.art === "fehler") $("a_stand").textContent = `Letzter Versuch fehlgeschlagen: ${z.text}`;
   });
@@ -754,6 +769,7 @@ async function start() {
     status(`Speicher nicht verfügbar: ${err.message}`, true);
   }
   const nach = await nachschaetzen();
+  zustand.geplant = (await S.einstellung("geplant")) || [];
   rezepteAufbauen();
   typWechseln("essen");
   formularLeeren();

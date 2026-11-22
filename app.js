@@ -2,6 +2,7 @@
 import * as L from "./logik.js";
 import * as S from "./speicher.js";
 import * as A from "./abgleich.js";
+import * as U from "./uhr.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -41,6 +42,8 @@ function el(tag, attrs = {}, ...kinder) {
 }
 
 function herunterladen(name, inhalt, mime) {
+  // In der Android-App speichert die App selbst (Ordner „Download“)
+  if (U.dateiSpeichern(name, inhalt, mime)) return status(`Gespeichert im Ordner „Download“: ${name}`);
   const url = URL.createObjectURL(new Blob([inhalt], { type: mime }));
   const a = el("a", { href: url, download: name });
   document.body.append(a);
@@ -706,7 +709,7 @@ async function abgleichAufbauen() {
     status("Verbindung wird geprüft …");
     try {
       const t = await A.testen(url, schluessel);
-      await A.einstellungenSetzen(url, schluessel);
+      U.zugangMelden(await A.einstellungenSetzen(url, schluessel));
       status(`Verbindung ok (${t.eintraege} Einträge bei Google). Abgleich läuft …`);
       const r = await A.abgleichen();
       if (r && r.ok) status(`Abgleich fertig: ${r.gesendet} gesendet, ${r.empfangen} empfangen.`);
@@ -755,6 +758,7 @@ function allesZeigen() {
   zeitleisteZeigen();
   vierzehnZeigen();
   musterZeigen();
+  U.senden();   // Tageswerte an die Uhr (nur in der Android-App)
 }
 
 async function start() {
@@ -778,6 +782,16 @@ async function start() {
   status(n ? `${n} Einträge geladen.${nach ? ` ${nach} offene kcal aus dem Verlauf ergänzt.` : ""}`
     : "Noch keine Einträge – über ⚙ oben rechts mit Google verbinden oder einen Export importieren.");
   await abgleichAufbauen();
+  if (U.aktiv()) {
+    U.zugangMelden(await A.einstellungen());
+    $("u_pruefen").hidden = false;
+    $("u_pruefen").addEventListener("click", () => U.statusOeffnen());
+    U.starten((n) => {
+      status(`${n === 1 ? "1 Eintrag" : `${n} Einträge`} von der Uhr übernommen.`);
+      allesZeigen();
+      A.bald();
+    });
+  }
   A.automatischStarten();
 }
 

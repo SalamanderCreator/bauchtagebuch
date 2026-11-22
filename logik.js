@@ -528,3 +528,64 @@ export function kiExport(eintraege, von, bis) {
   }
   return z.join("\n") + "\n";
 }
+
+// ------------------------------------------------------------------ Garmin-Uhr
+
+// Menge eines Getränks in ml (wie im Google-Script mlLesen). Eigenes Feld "ml" geht vor; sonst Freitext:
+// "500" / "300" = ml, Zahl bis 3 = Liter ("1", "0,75"), "1l", "0,5 l", "33 cl", "2 Gläser", "1 Flasche".
+// Leer oder unlesbar = ein Glas (250 ml).
+export function mlLesen(e) {
+  if (typeof e.ml === "number" && e.ml >= 0) return e.ml;
+  const s = String(e.menge || "").trim().toLowerCase().replace(",", ".");
+  if (!s) return 250;
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*(ml|cl|dl|l|liter|glas|gläser|glaeser|tasse[n]?|becher|flasche[n]?|dose[n]?)?/);
+  if (!m) return 250;
+  const wert = parseFloat(m[1]), einheit = m[2] || "";
+  if (einheit === "ml") return wert;
+  if (einheit === "cl") return wert * 10;
+  if (einheit === "dl") return wert * 100;
+  if (einheit === "l" || einheit === "liter") return wert * 1000;
+  if (/^flasche/.test(einheit)) return wert * 500;
+  if (/^dose/.test(einheit)) return wert * 330;
+  if (einheit) return wert * 250;                 // Glas, Tasse, Becher
+  return wert <= 3 ? wert * 1000 : wert;          // reine Zahl
+}
+
+// Tageswerte für die Uhr wie im Google-Script (uhrDaten): {datum, kcal, woche: [{d, k}] × 7, ml,
+// letzterDrink, stand}. alle = Einträge einschließlich gelöschter. Zusätzlich für die Android-App:
+// uhrIds = IDs der Uhr-Einträge dieser 7 Tage, die schon enthalten sind (dort nicht doppelt zählen).
+export function uhrDaten(alle, jetzt = new Date()) {
+  const heute = datumText(jetzt);
+  const tage = [];
+  for (let t = 6; t >= 0; t--) tage.push(tageVerschieben(heute, -t));
+  const proTag = {};
+  let stand = 0, ml = 0, letzter = null;
+  const uhrIds = [];
+  for (const e of alle) {
+    const g = Date.parse(e.geaendert || "");
+    if (g > stand * 1000) stand = Math.floor(g / 1000);
+    if (e.geloescht || (e.typ !== "essen" && e.typ !== "trinken")) continue;
+    if (typeof e.kcal === "number") proTag[e.datum] = (proTag[e.datum] || 0) + Math.round(e.kcal);
+    if (String(e.id).startsWith("uhr-") && tage.includes(e.datum)) uhrIds.push(e.id);
+    if (e.typ === "trinken" && e.datum === heute) {
+      ml += mlLesen(e);
+      const zeit = e.zeit || MAHLZEIT_ZEIT[e.mahlzeit] || "";
+      if (zeit && (!letzter || zeit > letzter)) letzter = zeit;
+    }
+  }
+  const woche = tage.map((d) => ({ d, k: Object.prototype.hasOwnProperty.call(proTag, d) ? proTag[d] : null }));
+  return { datum: heute, kcal: proTag[heute] || 0, woche, ml: Math.round(ml), letzterDrink: letzter, stand, uhrIds };
+}
+
+// Eintrag von der Uhr (über die Android-App, schon vollständig wie im Google-Script angelegt) übernehmen?
+// Gibt den zu speichernden Eintrag zurück oder null (schon da / nichts zu tun).
+export function uhrEintragUebernehmen(vorhanden, e) {
+  if (!e || !/^uhr-[0-9a-z-]{4,40}$/.test(String(e.id))) return null;
+  if (e.geloescht) {
+    if (vorhanden && vorhanden.geloescht) return null;
+    if (vorhanden) return { ...vorhanden, geloescht: e.geloescht, geaendert: e.geaendert, sync: false };
+    return { ...e, sync: false };      // nie hier gewesen: gelöscht merken, damit Google es auch löscht
+  }
+  if (vorhanden) return null;          // schon da (z. B. über Google): nichts doppelt
+  return { ...e, sync: false };
+}

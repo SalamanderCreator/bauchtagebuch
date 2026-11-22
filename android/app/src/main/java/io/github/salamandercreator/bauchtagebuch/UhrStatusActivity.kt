@@ -42,8 +42,8 @@ class UhrStatusActivity : Activity() {
             setOnClickListener { akkuAusnahme() }
         }
         val app = Button(this).apply {
-            text = "Bauchtagebuch öffnen"
-            setOnClickListener { startActivity(Intent(this@UhrStatusActivity, MainActivity::class.java)) }
+            text = "Zurück zum Bauchtagebuch"
+            setOnClickListener { startActivity(Intent(this@UhrStatusActivity, MainActivity::class.java)); finish() }
         }
         protokoll = TextView(this).apply {
             textSize = 13f

@@ -32,18 +32,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Zweites Symbol: Zustand der Uhr-Verbindung und Test -->
+        <!-- Zustand der Uhr-Verbindung und Test: über ⚙ Einstellungen der App oder die Benachrichtigung -->
         <activity
             android:name=".UhrStatusActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="Uhr-Verbindung"
-            android:taskAffinity=".uhr"
-            android:theme="@android:style/Theme.Material.Light">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:theme="@android:style/Theme.Material.Light" />
 
         <service
             android:name=".UhrDienst"

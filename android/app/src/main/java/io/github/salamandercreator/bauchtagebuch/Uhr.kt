@@ -7,6 +7,7 @@ import com.garmin.android.connectiq.ConnectIQ
 import com.garmin.android.connectiq.IQApp
 import com.garmin.android.connectiq.IQDevice
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.Date
 import java.util.Locale
 
@@ -36,12 +37,18 @@ object Uhr {
     var letzteNachricht = 0L
         private set
 
+    /** Wird aufgerufen, wenn neue Einträge von der Uhr da sind (MainActivity gibt sie an die Web-App) */
+    @Volatile var beiEingang: (() -> Unit)? = null
+
+    private var zuletztGesendet = ""
+
     // ------------------------------------------------------------------ Start / Ende
 
     fun starten(ctx: Context) {
         if (ciq != null) return
         val k = ctx.applicationContext
         kontext = k
+        Speicher.init(k)
         val c = ConnectIQ.getInstance(k, ConnectIQ.IQConnectType.WIRELESS)
         ciq = c
         sdkZustand = "verbindet mit Garmin Connect …"
@@ -103,7 +110,8 @@ object Uhr {
                 c.registerForDeviceEvents(g) { d, s ->
                     val alt = zustaende[d.deviceIdentifier]
                     zustaende[d.deviceIdentifier] = s
-                    if (alt != s) log("${d.friendlyName}: ${zustandText(s)}")
+                    if (alt != s) log("${name(d)}: ${zustandText(s)}")
+                    if (s == IQDevice.IQDeviceStatus.CONNECTED) werteSenden(erzwingen = true)
                 }
                 c.registerForAppEvents(g, app, object : ConnectIQ.IQApplicationEventListener {
                     override fun onMessageReceived(
@@ -128,7 +136,7 @@ object Uhr {
                     }
                 })
             } catch (e: Exception) {
-                log("Anmelden bei ${g.friendlyName} fehlgeschlagen: ${e.message}")
+                log("Anmelden bei ${name(g)} fehlgeschlagen: ${e.message}")
             }
         }
         geaendert()
@@ -140,11 +148,57 @@ object Uhr {
         letzteNachricht = System.currentTimeMillis()
         val map = m as? Map<*, *>
         when (map?.get("t")) {
-            "hallo" -> log("Uhr meldet sich (App geöffnet)")
+            "eintraege" -> eintraegeAnnehmen(map["e"] as? List<*> ?: emptyList<Any>())
+            "hallo" -> { log("Uhr meldet sich"); werteSenden(erzwingen = true) }
             "pong" -> log("Antwort von der Uhr auf Test ${map["n"]} ✓")
             else -> log("Nachricht von der Uhr: $m")
         }
     }
+
+    /** Warteschlange der Uhr: aufnehmen, bestätigen (mit den neuen Tageswerten), an Google weitergeben */
+    private fun eintraegeAnnehmen(liste: List<*>) {
+        val jetzt = UhrLogik.jetztIso()
+        val ok = mutableListOf<String>()
+        var neu = 0
+        for (x in liste) {
+            val e = UhrLogik.eintragAusUhr(x as? Map<*, *> ?: continue, jetzt) ?: continue
+            if (Speicher.aufnehmen(e)) {
+                neu++
+                log((if (UhrLogik.istGeloescht(e)) "Von der Uhr gelöscht: " else "Von der Uhr: ") +
+                    e.optString("text", e.optString("id")) + (if (e.has("ml")) " ${e.optInt("ml")} ml" else ""))
+            }
+            ok.add(e.optString("id"))
+        }
+        if (liste.isEmpty()) log("Uhr fragt nach den Tageswerten")
+        if (Speicher.basis() == null) log("Noch keine Tageswerte: bitte die App Bauchtagebuch einmal öffnen")
+        werteSenden(ok, erzwingen = true)
+        if (neu > 0) {
+            Weiterleitung.anstossen()
+            beiEingang?.invoke()
+        }
+    }
+
+    /**
+     * Tageswerte an die Uhr: Grundlage aus der Web-App + noch nicht übernommene Uhr-Einträge.
+     * Ohne Grundlage (Web-App noch nie in dieser App geöffnet) nichts senden und nichts bestätigen –
+     * dann zählt die Uhr selbst weiter und schickt ihre Einträge wie bisher an Google.
+     */
+    fun werteSenden(ok: List<String> = emptyList(), erzwingen: Boolean = false) {
+        haupt.post {
+            val basis = Speicher.basis() ?: return@post
+            val w = UhrLogik.werte(basis, Speicher.eingang(), LocalDate.now())
+            val text = w.toString()
+            if (!erzwingen && ok.isEmpty() && text == zuletztGesendet) return@post
+            zuletztGesendet = text
+            if (ok.isNotEmpty()) w["ok"] = ok
+            senden(w) { erfolg ->
+                if (erfolg && ok.isNotEmpty()) log("${ok.size} Eintrag/Einträge der Uhr bestätigt")
+                else if (erfolg) log("Tageswerte an die Uhr: ${w["kcal"]} kcal, ${w["ml"]} ml")
+            }
+        }
+    }
+
+    private fun name(d: IQDevice): String = d.friendlyName?.takeIf { it.isNotBlank() } ?: "Uhr"
 
     /** Nachricht an alle verbundenen Uhren senden */
     fun senden(nachricht: Map<String, Any>, fertig: ((Boolean) -> Unit)? = null) {
@@ -156,7 +210,7 @@ object Uhr {
             try {
                 c.sendMessage(g, app, nachricht) { _, _, s ->
                     val ok = s == ConnectIQ.IQMessageStatus.SUCCESS
-                    if (!ok) log("Senden an ${g.friendlyName} fehlgeschlagen: $s")
+                    if (!ok) log("Senden an ${name(g)} fehlgeschlagen: $s")
                     fertig?.invoke(ok)
                 }
             } catch (e: Exception) {
@@ -177,7 +231,7 @@ object Uhr {
 
     fun geraeteText(): String {
         if (geraete.isEmpty()) return "keine Uhr bekannt"
-        return geraete.values.joinToString("\n") { "${it.friendlyName}: ${zustandText(zustaende[it.deviceIdentifier])}" }
+        return geraete.values.joinToString("\n") { "${name(it)}: ${zustandText(zustaende[it.deviceIdentifier])}" }
     }
 
     private fun zustandText(s: IQDevice.IQDeviceStatus?) = when (s) {

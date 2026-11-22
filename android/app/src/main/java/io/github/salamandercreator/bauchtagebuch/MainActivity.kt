@@ -26,11 +26,14 @@ class MainActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Speicher.init(this)
         web = WebView(this)
         setContentView(web)
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.settings.databaseEnabled = true
+        // window.BauchUhr: Tageswerte an die Uhr, Einträge von der Uhr abholen (nur eigene Seite, s. u.)
+        web.addJavascriptInterface(Bruecke(this), "BauchUhr")
 
         web.webViewClient = object : WebViewClient() {
             // Nur die eigene Seite im Fenster öffnen, alles andere (z. B. HelloFresh) im Browser
@@ -65,6 +68,18 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         UhrDienst.starten(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Neue Einträge von der Uhr gleich an die Web-App geben
+        Uhr.beiEingang = { runOnUiThread { web.evaluateJavascript("window.bauchUhrNeu && window.bauchUhrNeu()", null) } }
+        web.evaluateJavascript("window.bauchUhrNeu && window.bauchUhrNeu()", null)
+    }
+
+    override fun onPause() {
+        Uhr.beiEingang = null
+        super.onPause()
     }
 
     private fun istEigeneSeite(u: Uri): Boolean =

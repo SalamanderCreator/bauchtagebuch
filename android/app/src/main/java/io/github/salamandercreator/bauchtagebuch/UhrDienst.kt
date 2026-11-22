@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.IBinder
 
@@ -16,6 +18,11 @@ import android.os.IBinder
  * nicht beendet, wenn die App geschlossen ist.
  */
 class UhrDienst : Service() {
+
+    // Sobald wieder Internet da ist: wartende Uhr-Einträge an Google weitergeben
+    private val netz = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) { Weiterleitung.anstossen() }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -43,11 +50,14 @@ class UhrDienst : Service() {
             startForeground(1, n)
         }
         Uhr.starten(this)
+        try { getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(netz) } catch (_: Exception) {}
+        Weiterleitung.anstossen()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
+        try { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(netz) } catch (_: Exception) {}
         Uhr.beenden()
         super.onDestroy()
     }

@@ -52,4 +52,6 @@ dependencies {
     // Garmin Connect IQ Mobile SDK (kostenlos, Maven Central)
     implementation("com.garmin.connectiq:ciq-companion-app-sdk:2.0.3@aar")
     testImplementation("junit:junit:4.13.2")
+    // echte org.json-Klassen für Unit-Tests (in android.jar sind es nur Platzhalter)
+    testImplementation("org.json:json:20240303")
 }

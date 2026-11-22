@@ -1,0 +1,67 @@
+# Baut die Android-App „Bauchtagebuch“ und stellt die APK als Download bereit:
+# https://github.com/salamandercreator/bauchtagebuch/releases/download/android/bauchtagebuch.apk
+# Signierschlüssel nur aus den Secrets APK_SCHLUESSEL (Base64 der .p12) und APK_SCHLUESSEL_PASSWORT.
+name: Android-App bauen
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bauen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Signierschlüssel auspacken
+        id: schluessel
+        env:
+          APK_SCHLUESSEL: ${{ secrets.APK_SCHLUESSEL }}
+        run: |
+          if [ -z "$APK_SCHLUESSEL" ]; then
+            echo "::warning::Secret APK_SCHLUESSEL fehlt – es wird nur zur Probe gebaut, keine APK veröffentlicht."
+            echo "da=nein" >> "$GITHUB_OUTPUT"
+          else
+            echo "$APK_SCHLUESSEL" | base64 -d > "$RUNNER_TEMP/schluessel.p12"
+            echo "da=ja" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bauen und testen
+        env:
+          APK_SCHLUESSEL_DATEI: ${{ steps.schluessel.outputs.da == 'ja' && format('{0}/schluessel.p12', runner.temp) || '' }}
+          APK_SCHLUESSEL_PASSWORT: ${{ secrets.APK_SCHLUESSEL_PASSWORT }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          [ -z "$APK_SCHLUESSEL_DATEI" ] && unset APK_SCHLUESSEL_DATEI
+          if [ "${{ steps.schluessel.outputs.da }}" = "ja" ]; then ZIEL=assembleRelease; else ZIEL=assembleDebug; fi
+          set -o pipefail
+          gradle -p android $ZIEL testDebugUnitTest --no-daemon 2>&1 | tee bau.log || {
+            # Fehlermeldungen als Hinweise am Lauf anzeigen (auch ohne Anmeldung lesbar)
+            grep -E '^e: |error:|FAILURE|What went wrong' -A2 bau.log | head -40 | while IFS= read -r z; do echo "::error::$z"; done
+            exit 1
+          }
+
+      - name: APK veröffentlichen
+        if: steps.schluessel.outputs.da == 'ja'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk bauchtagebuch.apk
+          gh release delete android --yes --cleanup-tag || true
+          gh release create android bauchtagebuch.apk --prerelease \
+            --title "Android-App (neueste Fassung)" \
+            --notes "Fassung 1.${{ github.run_number }}, gebaut aus ${GITHUB_SHA::7}. Auf dem Handy herunterladen und installieren."

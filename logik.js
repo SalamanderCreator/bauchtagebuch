@@ -574,7 +574,55 @@ export function uhrDaten(alle, jetzt = new Date()) {
     }
   }
   const woche = tage.map((d) => ({ d, k: Object.prototype.hasOwnProperty.call(proTag, d) ? proTag[d] : null }));
-  return { datum: heute, kcal: proTag[heute] || 0, woche, ml: Math.round(ml), letzterDrink: letzter, stand, uhrIds };
+  return { datum: heute, kcal: proTag[heute] || 0, woche, ml: Math.round(ml), letzterDrink: letzter, stand, uhrIds,
+    speisen: uhrSpeisen(alle, jetzt) };
+}
+
+export const UHR_SPEISEN_ANZAHL = 12;
+export const UHR_SPEISEN_TAGE = 28;
+
+// Die häufigsten Speisen der letzten 4 Wochen für die Uhr (wie im Google-Script uhrSpeisen):
+// [{n: Name, k: kcal, m: Menge vom letzten Mal}] bzw. bei Rezepten [{n, k: kcal pro Portion, r: 1, ri: Rezept-ID}].
+// Kurz gehalten (Speicher der Uhr): höchstens 12, Name bis 30 Zeichen, Menge bis 16.
+export function uhrSpeisen(alle, jetzt = new Date()) {
+  const seit = tageVerschieben(datumText(jetzt), -UHR_SPEISEN_TAGE);
+  const gruppen = new Map();
+  for (const e of alle) {
+    if (e.geloescht || e.typ !== "essen" || e.datum < seit || typeof e.kcal !== "number") continue;
+    const text = String(e.text || "").trim();
+    if (!text) continue;
+    const r = e.rezept && e.rezept.id ? e.rezept : null;
+    const schluessel = r ? "r:" + r.id : text.toLowerCase();
+    const g = gruppen.get(schluessel) || { anzahl: 0, juengster: e };
+    g.anzahl++;
+    if ((e.datum + wirksameZeit(e)) > (g.juengster.datum + wirksameZeit(g.juengster))) g.juengster = e;
+    gruppen.set(schluessel, g);
+  }
+  return [...gruppen.values()]
+    .sort((a, b) => b.anzahl - a.anzahl
+      || (b.juengster.datum + wirksameZeit(b.juengster)).localeCompare(a.juengster.datum + wirksameZeit(a.juengster)))
+    .slice(0, UHR_SPEISEN_ANZAHL)
+    .map(({ juengster: e }) => {
+      const r = e.rezept && e.rezept.id ? e.rezept : null;
+      if (r) {
+        const p = portionenLesen(e.menge);
+        const kpp = typeof r.kcal === "number" ? r.kcal : (p ? e.kcal / p : e.kcal);
+        return { n: String(r.name || e.text).trim().slice(0, 30), k: Math.round(kpp), r: 1, ri: String(r.id) };
+      }
+      const s = { n: String(e.text).trim().slice(0, 30), k: Math.round(e.kcal) };
+      const m = String(e.menge || "").trim().slice(0, 16);
+      if (m) s.m = m;
+      return s;
+    });
+}
+
+// Rezept-Einträge von der Uhr (nur mit rezeptId) um Rezept und Zutaten aus der Rezeptliste ergänzen
+export function uhrRezeptErgaenzen(e, rezepte) {
+  if (!e || e.typ !== "essen" || !e.rezeptId || e.rezept) return null;
+  const r = rezepte.find((x) => x.id === e.rezeptId);
+  if (!r) return null;
+  return { ...e, rezept: { id: r.id, name: r.name, kcal: r.kcal, quelle: r.quelle || "" },
+    zutaten: [...(r.zutaten || [])] };
 }
 
 // Eintrag von der Uhr (über die Android-App, schon vollständig wie im Google-Script angelegt) übernehmen?

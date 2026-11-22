@@ -675,8 +675,22 @@ async function importieren(datei) {
   A.bald();
 }
 
+// Rezept-Einträge von der Uhr um Rezept und Zutaten ergänzen (für Muster und Rezeptvorschläge)
+async function uhrRezepteErgaenzen() {
+  let n = 0;
+  for (const e of S.eintraege()) {
+    const x = L.uhrRezeptErgaenzen(e, S.rezepte());
+    if (!x) continue;
+    await S.speichern(x);
+    n++;
+  }
+  if (n) A.bald();
+  return n;
+}
+
 // Offene kcal (ausstehend) aus dem Verlauf nachtragen, wo möglich
 async function nachschaetzen() {
+  await uhrRezepteErgaenzen();
   let n = 0;
   for (const e of S.eintraege()) {
     if (!L.istEssen(e) || typeof e.kcal === "number" || e.kcalQuelle === "eigene") continue;
@@ -743,7 +757,7 @@ async function abgleichAufbauen() {
       b.classList.add(z.offen ? "offen" : "ok");
       b.title = "Zuletzt abgeglichen " + z.zuletzt.toLocaleString("de-DE");
       $("a_stand").textContent = `Zuletzt abgeglichen: ${z.zuletzt.toLocaleString("de-DE")}`;
-      if (z.empfangen) allesZeigen();   // Änderungen vom anderen Gerät anzeigen
+      if (z.empfangen) uhrRezepteErgaenzen().then(allesZeigen);   // Änderungen vom anderen Gerät anzeigen
       rezeptStand();
       if (z.geplant) { zustand.geplant = z.geplant; vorschlaegeZeigen(); }
       else if (z.rezepte) vorschlaegeZeigen();
@@ -788,7 +802,7 @@ async function start() {
     $("u_pruefen").addEventListener("click", () => U.statusOeffnen());
     U.starten((n) => {
       status(`${n === 1 ? "1 Eintrag" : `${n} Einträge`} von der Uhr übernommen.`);
-      allesZeigen();
+      uhrRezepteErgaenzen().then(allesZeigen);
       A.bald();
     });
   }

@@ -19,7 +19,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="Bauchtagebuch"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Dunkel">
 
         <activity
             android:name=".MainActivity"
@@ -37,7 +37,7 @@
             android:name=".UhrStatusActivity"
             android:exported="false"
             android:label="Uhr-Verbindung"
-            android:theme="@android:style/Theme.Material.Light" />
+            android:theme="@style/DunkelMitTitel" />
 
         <service
             android:name=".UhrDienst"

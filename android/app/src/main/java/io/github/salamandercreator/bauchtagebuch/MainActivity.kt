@@ -32,6 +32,10 @@ class MainActivity : Activity() {
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.settings.databaseEnabled = true
+        // Dunkles Design: dunkler Hintergrund beim Laden; die Seite sieht über das dunkle App-Thema
+        // prefers-color-scheme: dark und zeigt ihr dunkles Design
+        web.setBackgroundColor(0xFF161815.toInt())
+        if (Build.VERSION.SDK_INT >= 33) web.settings.isAlgorithmicDarkeningAllowed = true
         // window.BauchUhr: Tageswerte an die Uhr, Einträge von der Uhr abholen (nur eigene Seite, s. u.)
         web.addJavascriptInterface(Bruecke(this), "BauchUhr")
 

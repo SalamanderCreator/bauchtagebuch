@@ -23,7 +23,8 @@ object UhrLogik {
     private fun zahl(o: Any?): Int? = (o as? Number)?.toInt()
 
     /**
-     * Eintrag der Uhr ({id, d, z, t, ml, k, del}) als vollständigen Eintrag wie im Google-Script
+     * Eintrag der Uhr ({id, d, z, t, ml, k, del}; Speisen mit a = "e", m = Menge, ri = Rezept-ID statt ml)
+     * als vollständigen Eintrag wie im Google-Script
      * (uhrAktion) – mit denselben Feldern, damit Web-App und Tabelle ihn gleich sehen.
      * null = unbrauchbar. Ein Löschauftrag ohne lesbare Daten wird zum kurzen Lösch-Vermerk {id, geloescht}.
      */
@@ -36,14 +37,23 @@ object UhrLogik {
         val t = (m["t"] as? String ?: "").trim().take(40)
         val ml = zahl(m["ml"]) ?: 0
         val k = zahl(m["k"]) ?: 0
-        val gueltig = t.isNotEmpty() && ml in 1..3000 && k in 0..3000 && DATUM.matches(d) && ZEIT.matches(z)
+        val essen = m["a"] == "e"
+        val ri = (m["ri"] as? String)?.take(60)?.takeIf { it.isNotEmpty() }
+        val gueltig = t.isNotEmpty() && (essen || ml in 1..3000) && k in 0..(if (essen) 5000 else 3000) &&
+            DATUM.matches(d) && ZEIT.matches(z)
         if (!gueltig) {
             return if (loeschen) JSONObject().put("id", id).put("geloescht", jetzt).put("geaendert", jetzt) else null
         }
-        val e = JSONObject()
-            .put("id", id).put("typ", "trinken").put("datum", d).put("zeit", z).put("mahlzeit", "")
-            .put("text", t).put("menge", "$ml ml").put("ml", ml).put("kcal", k).put("kcalQuelle", "eigene")
-            .put("notiz", "über Uhr").put("quelle", "uhr").put("erstellt", jetzt).put("geaendert", jetzt)
+        val e = JSONObject().put("id", id).put("typ", if (essen) "essen" else "trinken").put("datum", d)
+            .put("zeit", z).put("mahlzeit", "").put("text", t)
+        if (essen) {
+            e.put("menge", (m["m"] as? String ?: "").trim().take(30)).put("kcal", k)
+                .put("kcalQuelle", if (ri != null) "rezept" else "verlauf")
+        } else {
+            e.put("menge", "$ml ml").put("ml", ml).put("kcal", k).put("kcalQuelle", "eigene")
+        }
+        e.put("notiz", "über Uhr").put("quelle", "uhr").put("erstellt", jetzt).put("geaendert", jetzt)
+        if (essen && ri != null) e.put("rezeptId", ri)
         if (loeschen) e.put("geloescht", jetzt)
         return e
     }
@@ -83,7 +93,7 @@ object UhrLogik {
             val vz = if (istGeloescht(e)) (if (drin) -1 else 0) else (if (drin) 0 else 1)
             if (vz == 0) continue
             kcal[d] = (kcal[d] ?: 0) + vz * e.optInt("kcal")
-            if (d == h) {
+            if (d == h && e.optString("typ") == "trinken") {
                 ml += vz * e.optInt("ml")
                 val z = e.optString("zeit")
                 if (vz > 0 && z.isNotEmpty() && (letzter == null || z > letzter!!)) letzter = z
@@ -96,7 +106,25 @@ object UhrLogik {
             "ml" to maxOf(ml, 0), "stand" to stand.toInt()
         )
         letzter?.let { erg["letzterDrink"] = it }
+        speisen(basis.optJSONArray("speisen"))?.let { erg["speisen"] = it }
         return erg
+    }
+
+    /** Speisenliste der Web-App ([{n, k, m?, r?, ri?}]) als Liste von Maps für die Uhr, höchstens 12 */
+    fun speisen(a: JSONArray?): List<Map<String, Any>>? {
+        if (a == null) return null
+        val l = mutableListOf<Map<String, Any>>()
+        for (i in 0 until minOf(a.length(), 12)) {
+            val o = a.optJSONObject(i) ?: continue
+            val n = o.optString("n").take(30)
+            if (n.isEmpty()) continue
+            val s = mutableMapOf<String, Any>("n" to n, "k" to o.optInt("k"))
+            o.optString("m").take(16).takeIf { it.isNotEmpty() }?.let { s["m"] = it }
+            if (o.optInt("r") == 1) s["r"] = 1
+            o.optString("ri").take(60).takeIf { it.isNotEmpty() }?.let { s["ri"] = it }
+            l.add(s)
+        }
+        return l
     }
 
     fun liste(a: JSONArray?): MutableList<JSONObject> {

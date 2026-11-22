@@ -18,7 +18,8 @@ class UhrLogikTest {
             "woche":[{"d":"2026-11-16","k":null},{"d":"2026-11-17","k":1900},{"d":"2026-11-18","k":null},
                      {"d":"2026-11-19","k":null},{"d":"2026-11-20","k":1800},{"d":"2026-11-21","k":2100},
                      {"d":"2026-11-22","k":600}],
-            "uhrIds":["uhr-1795000000-1"]}"""
+            "uhrIds":["uhr-1795000000-1"],
+            "speisen":[{"n":"Brötchen, Butter, Käse","k":270,"m":"1 Stück"},{"n":"Flammkuchen","k":820,"r":1,"ri":"hf-123"}]}"""
     )
 
     private fun uhr(id: String, ml: Int = 330, k: Int = 139, z: String = "14:10", del: Int? = null): Map<String, Any> {
@@ -84,5 +85,33 @@ class UhrLogikTest {
         @Suppress("UNCHECKED_CAST") val woche = w["woche"] as List<Map<String, Any>>
         assertEquals(mapOf("d" to "2026-11-22", "k" to 600), woche[5])
         assertEquals(mapOf("d" to "2026-11-23"), woche[6])
+    }
+
+    @Test
+    fun speiseVonDerUhrWieImScript() {
+        val m = mapOf("id" to "uhr-1795001000-3", "d" to "2026-11-22", "z" to "12:30", "t" to "Flammkuchen",
+            "a" to "e", "m" to "0,5 Portionen", "k" to 410, "ri" to "hf-123")
+        val e = UhrLogik.eintragAusUhr(m, jetzt)!!
+        assertEquals("essen", e.getString("typ"))
+        assertEquals("0,5 Portionen", e.getString("menge"))
+        assertEquals(410, e.getInt("kcal"))
+        assertEquals("rezept", e.getString("kcalQuelle"))
+        assertEquals("hf-123", e.getString("rezeptId"))
+        assertFalse(e.has("ml"))
+        val ohneRezept = UhrLogik.eintragAusUhr(m - "ri" + ("m" to "1 Stück"), jetzt)!!
+        assertEquals("verlauf", ohneRezept.getString("kcalQuelle"))
+        // Essen zählt zu kcal, nicht zu ml und nicht als letztes Getränk
+        val w = UhrLogik.werte(basis(), listOf(e), heute)
+        assertEquals(1010, w["kcal"])
+        assertEquals(500, w["ml"])
+        assertEquals("12:30", w["letzterDrink"])
+    }
+
+    @Test
+    fun speisenWerdenDurchgereicht() {
+        @Suppress("UNCHECKED_CAST") val s = UhrLogik.werte(basis(), emptyList(), heute)["speisen"] as List<Map<String, Any>>
+        assertEquals(2, s.size)
+        assertEquals(mapOf("n" to "Brötchen, Butter, Käse", "k" to 270, "m" to "1 Stück"), s[0])
+        assertEquals(mapOf("n" to "Flammkuchen", "k" to 820, "r" to 1, "ri" to "hf-123"), s[1])
     }
 }

@@ -64,7 +64,7 @@ object UhrLogik {
      * Tageswerte für die Uhr: Grundlage aus der Web-App (logik.js uhrDaten) plus die Uhr-Einträge, die die
      * Web-App noch nicht übernommen hat; auf das heutige Datum umgerechnet (falls die Grundlage von gestern ist).
      */
-    fun werte(basis: JSONObject, offen: List<JSONObject>, heute: LocalDate): MutableMap<String, Any> {
+    fun werte(basis: JSONObject, offen: List<JSONObject>, heute: LocalDate, uhrEinstStand: Long? = null): MutableMap<String, Any> {
         val h = heute.toString()
         val tage = (6 downTo 0).map { heute.minusDays(it.toLong()).toString() }
         val kcal = HashMap<String, Int>()
@@ -107,6 +107,13 @@ object UhrLogik {
         )
         letzter?.let { erg["letzterDrink"] = it }
         erg["grund"] = grund(basis) ?: 0      // 0 = kein Wert in der App: die Uhr schätzt wieder selbst
+        // Einstellungen der Uhr-App nur, wenn die Uhr einen anderen Stand meldet (spart Platz in der Nachricht)
+        val einst = basis.optJSONObject("einst")
+        val st = basis.optLong("einstStand", 0)
+        if (einst != null && st > 0 && st != uhrEinstStand) {
+            erg["einst"] = karte(einst)
+            erg["einstStand"] = st.toInt()
+        }
         speisen(basis.optJSONArray("speisen"))?.let { erg["speisen"] = it }
         return erg
     }
@@ -137,6 +144,18 @@ object UhrLogik {
 
     /** Neues Gewicht von der Uhr → Hinweis zeigen? Nicht beim allerersten Wert (dann ist nichts „neu“). */
     fun gewichtNeu(alt: Int?, neu: Int?): Boolean = neu != null && alt != null && alt != neu
+
+    /** JSON-Objekt als Map für die Uhr (nur Zahlen, Texte, Schalter; ganze Zahlen als Int) */
+    fun karte(o: JSONObject): Map<String, Any> {
+        val m = mutableMapOf<String, Any>()
+        for (k in o.keys()) {
+            when (val v = o.opt(k)) {
+                is Boolean, is String -> m[k] = v
+                is Number -> m[k] = if (v.toDouble() == Math.floor(v.toDouble()) && Math.abs(v.toDouble()) < 1e9) v.toInt() else v.toDouble()
+            }
+        }
+        return m
+    }
 
     fun liste(a: JSONArray?): MutableList<JSONObject> {
         val l = mutableListOf<JSONObject>()

@@ -13,6 +13,7 @@ import org.json.JSONObject
  *  - bekannt: IDs der letzten Uhr-Einträge (nichts doppelt anlegen)
  *  - zugang:  URL und Schlüssel des Google-Abgleichs (aus der Web-App)
  *  - gewicht: letztes Gewicht, das die Uhr gemeldet hat (Gramm, und wann es neu war)
+ *  - uhrEinst: Einstellungen, die auf der Uhr gelten (fürs Formular), und deren Stand
  */
 object Speicher {
     private lateinit var p: SharedPreferences
@@ -107,6 +108,14 @@ object Speicher {
     @Synchronized fun gewichtSetzen(gramm: Int) {
         p.edit().putInt("gewicht", gramm).putLong("gewichtZeit", System.currentTimeMillis()).apply()
     }
+
+    @Synchronized fun uhrEinstStand(): Long? = p.getLong("uhrEinstStand", -1).takeIf { it >= 0 }
+
+    @Synchronized fun uhrEinstStandSetzen(s: Long) { p.edit().putLong("uhrEinstStand", s).apply() }
+
+    @Synchronized fun uhrEinst(): String = p.getString("uhrEinst", "null") ?: "null"
+
+    @Synchronized fun uhrEinstSetzen(json: String) { p.edit().putString("uhrEinst", json).apply() }
 
     @Synchronized fun zugangSetzen(url: String, schluessel: String) {
         p.edit().putString("url", url.trim()).putString("schluessel", schluessel.trim()).apply()

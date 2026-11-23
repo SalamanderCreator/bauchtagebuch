@@ -130,4 +130,20 @@ class UhrLogikTest {
         assertNull(UhrLogik.gewicht(0))
         assertEquals(63900, UhrLogik.gewicht(63900))
     }
+
+    @Test
+    fun einstellungenNurBeiAnderemStand() {
+        val b = basis().put("einst", JSONObject("""{"defizit":350,"g2kcal":0.3,"g1kcal":42,"g2name":"Cola","erinnerung":false}"""))
+            .put("einstStand", 1795000000)
+        val w = UhrLogik.werte(b, emptyList(), heute, null)
+        @Suppress("UNCHECKED_CAST") val e = w["einst"] as Map<String, Any>
+        assertEquals(350, e["defizit"])
+        assertEquals(0.3, e["g2kcal"])
+        assertEquals(42, e["g1kcal"])
+        assertEquals(false, e["erinnerung"])
+        assertEquals(1795000000, w["einstStand"])
+        assertFalse(UhrLogik.werte(b, emptyList(), heute, 1795000000L).containsKey("einst"))
+        assertTrue(UhrLogik.werte(b, emptyList(), heute, 1).containsKey("einst"))
+        assertFalse(UhrLogik.werte(basis(), emptyList(), heute, null).containsKey("einst"))
+    }
 }

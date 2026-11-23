@@ -43,6 +43,10 @@ class Bruecke(private val aktivitaet: Activity) {
         return org.json.JSONObject().put("gramm", g).put("zeit", Speicher.gewichtZeit()).toString()
     }
 
+    /** Einstellungen, die die Uhr zuletzt als geltend gemeldet hat (JSON oder "null") */
+    @JavascriptInterface
+    fun uhrEinstellungen(): String = Speicher.uhrEinst()
+
     @JavascriptInterface
     fun statusOeffnen() {
         aktivitaet.runOnUiThread { aktivitaet.startActivity(Intent(aktivitaet, UhrStatusActivity::class.java)) }

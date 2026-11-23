@@ -8,6 +8,7 @@ import com.garmin.android.connectiq.IQApp
 import com.garmin.android.connectiq.IQDevice
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import org.json.JSONObject
 import java.util.Date
 import java.util.Locale
 
@@ -150,6 +151,10 @@ object Uhr {
         when (map?.get("t")) {
             "eintraege" -> {
                 gewichtPruefen(map["gewicht"])
+                (map["es"] as? Number)?.let { Speicher.uhrEinstStandSetzen(it.toLong()) }
+                (map["w"] as? Map<*, *>)?.let { w ->
+                    Speicher.uhrEinstSetzen(JSONObject(w.mapKeys { it.key.toString() }).toString())
+                }
                 eintraegeAnnehmen(map["e"] as? List<*> ?: emptyList<Any>())
             }
             "hallo" -> { log("Uhr meldet sich"); werteSenden(erzwingen = true) }
@@ -201,7 +206,7 @@ object Uhr {
     fun werteSenden(ok: List<String> = emptyList(), erzwingen: Boolean = false) {
         haupt.post {
             val basis = Speicher.basis() ?: return@post
-            val w = UhrLogik.werte(basis, Speicher.eingang(), LocalDate.now())
+            val w = UhrLogik.werte(basis, Speicher.eingang(), LocalDate.now(), Speicher.uhrEinstStand())
             val text = w.toString()
             if (!erzwingen && ok.isEmpty() && text == zuletztGesendet) return@post
             zuletztGesendet = text

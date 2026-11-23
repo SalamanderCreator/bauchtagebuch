@@ -36,6 +36,13 @@ class Bruecke(private val aktivitaet: Activity) {
         Weiterleitung.anstossen()
     }
 
+    /** Letztes Gewicht von der Uhr: {"gramm", "zeit"} oder null */
+    @JavascriptInterface
+    fun gewicht(): String {
+        val g = Speicher.gewicht() ?: return "null"
+        return org.json.JSONObject().put("gramm", g).put("zeit", Speicher.gewichtZeit()).toString()
+    }
+
     @JavascriptInterface
     fun statusOeffnen() {
         aktivitaet.runOnUiThread { aktivitaet.startActivity(Intent(aktivitaet, UhrStatusActivity::class.java)) }

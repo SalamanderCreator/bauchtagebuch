@@ -12,6 +12,7 @@ import org.json.JSONObject
  *  - google:  welche davon (in welcher Fassung) schon direkt an Google gegeben wurden
  *  - bekannt: IDs der letzten Uhr-Einträge (nichts doppelt anlegen)
  *  - zugang:  URL und Schlüssel des Google-Abgleichs (aus der Web-App)
+ *  - gewicht: letztes Gewicht, das die Uhr gemeldet hat (Gramm, und wann es neu war)
  */
 object Speicher {
     private lateinit var p: SharedPreferences
@@ -97,6 +98,14 @@ object Speicher {
         val g = google()
         l.forEach { g.put(it.optString("id"), it.optString("geaendert")) }
         p.edit().putString("google", g.toString()).apply()
+    }
+
+    @Synchronized fun gewicht(): Int? = p.getInt("gewicht", 0).takeIf { it > 0 }
+
+    @Synchronized fun gewichtZeit(): Long = p.getLong("gewichtZeit", 0)
+
+    @Synchronized fun gewichtSetzen(gramm: Int) {
+        p.edit().putInt("gewicht", gramm).putLong("gewichtZeit", System.currentTimeMillis()).apply()
     }
 
     @Synchronized fun zugangSetzen(url: String, schluessel: String) {

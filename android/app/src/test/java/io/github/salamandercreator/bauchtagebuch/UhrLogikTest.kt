@@ -114,4 +114,20 @@ class UhrLogikTest {
         assertEquals(mapOf("n" to "Brötchen, Butter, Käse", "k" to 270, "m" to "1 Stück"), s[0])
         assertEquals(mapOf("n" to "Flammkuchen", "k" to 820, "r" to 1, "ri" to "hf-123"), s[1])
     }
+
+    @Test
+    fun grundumsatzWirdDurchgereicht() {
+        assertEquals(0, UhrLogik.werte(basis(), emptyList(), heute)["grund"])
+        assertEquals(1589, UhrLogik.werte(basis().put("grund", 1589), emptyList(), heute)["grund"])
+        assertEquals(0, UhrLogik.werte(basis().put("grund", 300), emptyList(), heute)["grund"])
+    }
+
+    @Test
+    fun gewichtNurBeiAenderungMelden() {
+        assertFalse(UhrLogik.gewichtNeu(null, 64200))       // erster Wert: nichts melden
+        assertFalse(UhrLogik.gewichtNeu(64200, 64200))
+        assertTrue(UhrLogik.gewichtNeu(64200, 63900))
+        assertNull(UhrLogik.gewicht(0))
+        assertEquals(63900, UhrLogik.gewicht(63900))
+    }
 }

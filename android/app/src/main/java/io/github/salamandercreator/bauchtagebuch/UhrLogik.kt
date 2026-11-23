@@ -106,6 +106,7 @@ object UhrLogik {
             "ml" to maxOf(ml, 0), "stand" to stand.toInt()
         )
         letzter?.let { erg["letzterDrink"] = it }
+        erg["grund"] = grund(basis) ?: 0      // 0 = kein Wert in der App: die Uhr schätzt wieder selbst
         speisen(basis.optJSONArray("speisen"))?.let { erg["speisen"] = it }
         return erg
     }
@@ -126,6 +127,16 @@ object UhrLogik {
         }
         return l
     }
+
+    /** Grundumsatz laut Garmin aus der Web-App (800–4000 kcal/Tag), sonst null (= die Uhr schätzt selbst) */
+    fun grund(basis: JSONObject): Int? =
+        if (basis.has("grund") && !basis.isNull("grund")) basis.optInt("grund").takeIf { it in 800..4000 } else null
+
+    /** Gewicht der Uhr (Gramm) lesbar? */
+    fun gewicht(o: Any?): Int? = (o as? Number)?.toInt()?.takeIf { it in 20_000..400_000 }
+
+    /** Neues Gewicht von der Uhr → Hinweis zeigen? Nicht beim allerersten Wert (dann ist nichts „neu“). */
+    fun gewichtNeu(alt: Int?, neu: Int?): Boolean = neu != null && alt != null && alt != neu
 
     fun liste(a: JSONArray?): MutableList<JSONObject> {
         val l = mutableListOf<JSONObject>()

@@ -148,10 +148,25 @@ object Uhr {
         letzteNachricht = System.currentTimeMillis()
         val map = m as? Map<*, *>
         when (map?.get("t")) {
-            "eintraege" -> eintraegeAnnehmen(map["e"] as? List<*> ?: emptyList<Any>())
+            "eintraege" -> {
+                gewichtPruefen(map["gewicht"])
+                eintraegeAnnehmen(map["e"] as? List<*> ?: emptyList<Any>())
+            }
             "hallo" -> { log("Uhr meldet sich"); werteSenden(erzwingen = true) }
             "pong" -> log("Antwort von der Uhr auf Test ${map["n"]} ✓")
             else -> log("Nachricht von der Uhr: $m")
+        }
+    }
+
+    /** Gewicht aus dem Garmin-Profil der Uhr: ist es neu, an den Grundumsatz erinnern */
+    private fun gewichtPruefen(o: Any?) {
+        val neu = UhrLogik.gewicht(o) ?: return
+        val alt = Speicher.gewicht()
+        if (alt == neu) return
+        Speicher.gewichtSetzen(neu)
+        if (UhrLogik.gewichtNeu(alt, neu)) {
+            log("Neues Gewicht von der Uhr: ${Hinweis.kg(neu)} kg")
+            kontext?.let { Hinweis.neuesGewicht(it, neu) }
         }
     }
 

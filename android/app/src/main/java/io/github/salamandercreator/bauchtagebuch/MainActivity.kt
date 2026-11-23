@@ -64,7 +64,8 @@ class MainActivity : Activity() {
             }
         }
 
-        if (savedInstanceState != null) web.restoreState(savedInstanceState) else web.loadUrl(START_URL)
+        if (savedInstanceState != null) web.restoreState(savedInstanceState)
+        else web.loadUrl(if (intent?.getStringExtra(Hinweis.ZIEL) == Hinweis.GRUNDUMSATZ) "$START_URL#grundumsatz" else START_URL)
 
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -72,6 +73,15 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
         UhrDienst.starten(this)
+    }
+
+    // Tipp auf die Benachrichtigung „neues Gewicht“, während die App schon offen ist
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getStringExtra(Hinweis.ZIEL) == Hinweis.GRUNDUMSATZ) {
+            web.evaluateJavascript("window.bauchUhrGrund && window.bauchUhrGrund()", null)
+        }
     }
 
     override fun onResume() {

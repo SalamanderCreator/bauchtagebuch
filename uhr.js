@@ -13,6 +13,8 @@ export const aktiv = () => !!window.BauchUhr;
 let zeitgeber = null;
 let zuletzt = "";
 let grund = null;      // Grundumsatz laut Garmin (kcal/Tag), null = Schätzung der Uhr
+let einst = null;      // Einstellungen der Uhr-App aus dem Formular ({…, felder, felderStand}) oder null
+let einstStand = 0;    // Zeitpunkt der letzten Änderung (Sekunden) – die Uhr übernimmt nur einen neuen Stand
 let neuZeigen = () => {};
 
 // Tageswerte (gebündelt, kurz nach einer Änderung) an die Android-App
@@ -26,6 +28,7 @@ function jetztSenden() {
   if (!aktiv()) return;
   const daten = L.uhrDaten(S.alleMitGeloeschten());
   if (grund) daten.grund = grund;
+  if (einst && einstStand) { daten.einst = einst; daten.einstStand = einstStand; }
   const text = JSON.stringify(daten);
   if (text === zuletzt) return;
   zuletzt = text;
@@ -72,17 +75,43 @@ export function grundPruefen(wert) {
 }
 
 export async function grundLaden() {
-  const e = await S.einstellung("uhr");
-  grund = grundPruefen(e && e.grund);
+  const e = (await S.einstellung("uhr")) || {};
+  grund = grundPruefen(e.grund);
+  einst = e.einst && typeof e.einst === "object" ? e.einst : null;
+  einstStand = Number(e.einstStand) || 0;
   return grund;
+}
+
+async function uhrSpeichern() {
+  await S.einstellung("uhr", { grund, einst, einstStand });
+  zuletzt = "";
+  senden();
 }
 
 export async function grundSetzen(g) {
   grund = grundPruefen(g);
-  await S.einstellung("uhr", { grund });
-  zuletzt = "";
-  senden();
+  await uhrSpeichern();
   return grund;
+}
+
+// Gespeicherte Einstellungen der Uhr-App (oder null)
+export const einstellungen = () => einst;
+
+// Neue Einstellungen (geprüft, aus uhreinst.js pruefen) speichern und an die Uhr geben.
+// felderStand ändert sich nur, wenn sich die Ziffernblatt-Felder ändern (sonst gilt das Menü der Uhr weiter).
+export async function einstellungenSetzen(werte) {
+  const jetzt = Math.floor(Date.now() / 1000);
+  const felderStand = einst && einst.felder === werte.felder && einst.felderStand ? einst.felderStand : jetzt;
+  einst = { ...werte, felderStand };
+  einstStand = jetzt;
+  await uhrSpeichern();
+  return einst;
+}
+
+// Einstellungen, die die Uhr zuletzt als geltend gemeldet hat (oder null)
+export function einstellungenDerUhr() {
+  if (!aktiv() || !bruecke().uhrEinstellungen) return null;
+  try { return JSON.parse(bruecke().uhrEinstellungen() || "null"); } catch { return null; }
 }
 
 // Letztes Gewicht, das die Uhr gemeldet hat: { gramm, zeit } oder null

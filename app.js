@@ -3,6 +3,7 @@ import * as L from "./logik.js";
 import * as S from "./speicher.js";
 import * as A from "./abgleich.js";
 import * as U from "./uhr.js";
+import * as UE from "./uhreinst.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -801,6 +802,7 @@ async function start() {
     $("uhr_bereich").hidden = false;
     $("u_pruefen").addEventListener("click", () => U.statusOeffnen());
     await uhrGrundAufbauen();
+    uhrEinstAufbauen();
     U.starten((n) => {
       status(`${n === 1 ? "1 Eintrag" : `${n} Einträge`} von der Uhr übernommen.`);
       uhrRezepteErgaenzen().then(allesZeigen);
@@ -842,6 +844,65 @@ async function uhrGrundAufbauen() {
     history.replaceState(null, "", location.pathname + location.search);
     window.bauchUhrGrund();
   }
+}
+
+// Alle Einstellungen der Uhr-App und die Ziffernblatt-Felder (nur in der Android-App)
+function uhrEinstFormular() {
+  const gespeichert = U.einstellungen();
+  const vonUhr = U.einstellungenDerUhr();
+  const w = UE.vorbelegen(gespeichert, vonUhr);
+  $("u_einst_quelle").textContent = gespeichert ? "Angezeigt: zuletzt hier gespeichert."
+    : (vonUhr ? "Angezeigt: was gerade auf der Uhr gilt." : "Angezeigt: Standardwerte (die Uhr hat sich noch nicht gemeldet – einmal die App auf der Uhr öffnen).");
+  const box = $("u_einst");
+  box.replaceChildren();
+  for (const g of UE.GRUPPEN) {
+    const h = document.createElement("h4");
+    h.textContent = g.titel;
+    const raster = document.createElement("div");
+    raster.className = "uhr_einst";
+    for (const f of g.felder) {
+      const l = document.createElement("label");
+      let feld;
+      if (f.art === "feld") {
+        feld = document.createElement("select");
+        for (const [n, name] of UE.FELD_ARTEN) feld.add(new Option(name, String(n)));
+        feld.value = String(w[f.id]);
+      } else {
+        feld = document.createElement("input");
+        if (f.art === "schalter") { feld.type = "checkbox"; feld.checked = !!w[f.id]; l.className = "schalter"; }
+        else if (f.art === "zeit") { feld.type = "time"; feld.value = w[f.id]; }
+        else if (f.art === "text") { feld.type = "text"; feld.maxLength = 30; feld.value = w[f.id]; }
+        else {
+          feld.type = "number"; feld.inputMode = f.art === "komma" ? "decimal" : "numeric";
+          feld.step = f.art === "komma" ? "0.1" : "1"; feld.min = f.min; feld.max = f.max; feld.value = w[f.id];
+        }
+      }
+      feld.dataset.einst = f.id;
+      l.append(f.text + (f.einheit ? ` (${f.einheit})` : "") + " ", feld);
+      raster.append(l);
+    }
+    box.append(h, raster);
+  }
+}
+
+function uhrEinstAufbauen() {
+  uhrEinstFormular();
+  $("u_einst_speichern").addEventListener("click", async () => {
+    const roh = {};
+    for (const el of $("u_einst").querySelectorAll("[data-einst]")) {
+      roh[el.dataset.einst] = el.type === "checkbox" ? el.checked : el.value;
+    }
+    const p = UE.pruefen(roh);
+    if (p.fehler.length) {
+      $("u_einst_stand").textContent = p.fehler.join(" ");
+      return status("Einstellungen nicht gespeichert: " + p.fehler[0], true);
+    }
+    await U.einstellungenSetzen(p.werte);
+    $("u_einst_stand").textContent = ["Gespeichert – geht beim nächsten Kontakt an die Uhr.", ...p.hinweise].join(" ");
+    status("Einstellungen der Uhr gespeichert.");
+  });
+  // Wenn die Uhr ihre Werte neu gemeldet hat (App wieder sichtbar) und hier noch nichts gespeichert ist
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !U.einstellungen()) uhrEinstFormular(); });
 }
 
 function tagSetzen(d) {

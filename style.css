@@ -276,3 +276,10 @@ h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; font-size: 1.05r
   .eintrag { grid-template-columns: 3.6em 1fr; }
   .e_aktionen { grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; }
 }
+
+/* Einstellungen der Uhr */
+.uhr_einst { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin: 4px 0 12px; }
+.uhr_einst label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; }
+.uhr_einst label.schalter { flex-direction: row; align-items: center; grid-column: 1 / -1; }
+@media (max-width: 520px) { .uhr_einst { grid-template-columns: 1fr; } }
+#u_einst h4 { margin: 12px 0 4px; }

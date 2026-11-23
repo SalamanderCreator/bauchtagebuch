@@ -171,7 +171,21 @@
       <button type="button" id="a_jetzt" class="zweit">Jetzt abgleichen</button>
     </div>
     <p id="a_stand" class="hinweis"></p>
-    <button type="button" id="u_pruefen" class="zweit" hidden>Uhr-Verbindung prüfen</button>
+
+    <div id="uhr_bereich" hidden>
+      <h3 id="uhr_titel">Uhr</h3>
+      <p class="hinweis">Grundumsatz aus Garmin Connect (Ruhekalorien pro Tag). Die Uhr rechnet damit statt mit
+        ihrer eigenen Schätzung aus Gewicht, Größe und Alter. Leer lassen = Schätzung der Uhr.</p>
+      <div class="abgleich_felder">
+        <label>Grundumsatz laut Garmin (kcal/Tag)
+          <input type="number" id="u_grund" min="800" max="4000" step="1" inputmode="numeric"></label>
+      </div>
+      <div class="datenzeile">
+        <button type="button" id="u_grund_speichern" class="haupt">Speichern</button>
+        <button type="button" id="u_pruefen" class="zweit">Uhr-Verbindung prüfen</button>
+      </div>
+      <p id="u_stand" class="hinweis"></p>
+    </div>
   </dialog>
 
   <script type="module" src="app.js"></script>

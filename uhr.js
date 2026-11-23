@@ -12,6 +12,7 @@ export const aktiv = () => !!window.BauchUhr;
 
 let zeitgeber = null;
 let zuletzt = "";
+let grund = null;      // Grundumsatz laut Garmin (kcal/Tag), null = Schätzung der Uhr
 let neuZeigen = () => {};
 
 // Tageswerte (gebündelt, kurz nach einer Änderung) an die Android-App
@@ -23,7 +24,9 @@ export function senden() {
 
 function jetztSenden() {
   if (!aktiv()) return;
-  const text = JSON.stringify(L.uhrDaten(S.alleMitGeloeschten()));
+  const daten = L.uhrDaten(S.alleMitGeloeschten());
+  if (grund) daten.grund = grund;
+  const text = JSON.stringify(daten);
   if (text === zuletzt) return;
   zuletzt = text;
   try { bruecke().werte(text); } catch (err) { console.warn("Uhr: Werte nicht übergeben", err); }
@@ -62,6 +65,32 @@ export function dateiSpeichern(name, inhalt, mime) {
   return !!bruecke().dateiSpeichern(name, inhalt, mime);
 }
 
+// Grundumsatz laut Garmin: gültig 800–4000 kcal, sonst null (= die Uhr schätzt selbst)
+export function grundPruefen(wert) {
+  const g = Math.round(Number(wert));
+  return Number.isFinite(g) && g >= 800 && g <= 4000 ? g : null;
+}
+
+export async function grundLaden() {
+  const e = await S.einstellung("uhr");
+  grund = grundPruefen(e && e.grund);
+  return grund;
+}
+
+export async function grundSetzen(g) {
+  grund = grundPruefen(g);
+  await S.einstellung("uhr", { grund });
+  zuletzt = "";
+  senden();
+  return grund;
+}
+
+// Letztes Gewicht, das die Uhr gemeldet hat: { gramm, zeit } oder null
+export function gewicht() {
+  if (!aktiv() || !bruecke().gewicht) return null;
+  try { return JSON.parse(bruecke().gewicht() || "null"); } catch { return null; }
+}
+
 export function statusOeffnen() {
   if (aktiv()) bruecke().statusOeffnen();
 }
@@ -72,5 +101,5 @@ export function starten(beiNeuen) {
   neuZeigen = beiNeuen;
   window.bauchUhrNeu = () => { abholen(); };
   document.addEventListener("visibilitychange", () => { if (!document.hidden) abholen(); });
-  abholen().then(() => { zuletzt = ""; senden(); });
+  grundLaden().catch(() => null).then(() => abholen()).then(() => { zuletzt = ""; senden(); });
 }

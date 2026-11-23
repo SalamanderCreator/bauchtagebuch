@@ -798,8 +798,9 @@ async function start() {
   await abgleichAufbauen();
   if (U.aktiv()) {
     U.zugangMelden(await A.einstellungen());
-    $("u_pruefen").hidden = false;
+    $("uhr_bereich").hidden = false;
     $("u_pruefen").addEventListener("click", () => U.statusOeffnen());
+    await uhrGrundAufbauen();
     U.starten((n) => {
       status(`${n === 1 ? "1 Eintrag" : `${n} Einträge`} von der Uhr übernommen.`);
       uhrRezepteErgaenzen().then(allesZeigen);
@@ -807,6 +808,40 @@ async function start() {
     });
   }
   A.automatischStarten();
+}
+
+// Grundumsatz laut Garmin für die Uhr (nur in der Android-App)
+function uhrGrundStand(g) {
+  const gw = U.gewicht();
+  const kg = gw && gw.gramm ? `Letztes Gewicht von der Uhr: ${(gw.gramm / 1000).toLocaleString("de-DE",
+    { maximumFractionDigits: 1 })} kg${gw.zeit ? ` (${new Date(gw.zeit).toLocaleDateString("de-DE")})` : ""}. ` : "";
+  $("u_stand").textContent = kg + (g ? `Die Uhr rechnet mit ${g} kcal.` : "Die Uhr schätzt den Grundumsatz selbst.");
+}
+
+async function uhrGrundAufbauen() {
+  const g = await U.grundLaden();
+  $("u_grund").value = g || "";
+  uhrGrundStand(g);
+  $("u_grund_speichern").addEventListener("click", async () => {
+    const roh = $("u_grund").value.trim();
+    if (roh && !U.grundPruefen(roh)) return status("Bitte einen Grundumsatz zwischen 800 und 4000 kcal eintragen.", true);
+    const neu = await U.grundSetzen(roh || null);
+    $("u_grund").value = neu || "";
+    uhrGrundStand(neu);
+    status(neu ? `Grundumsatz ${neu} kcal gespeichert, geht an die Uhr.` : "Grundumsatz gelöscht: die Uhr schätzt selbst.");
+  });
+  // Aus der Benachrichtigung „neues Gewicht“: Einstellungen beim Feld öffnen
+  window.bauchUhrGrund = () => {
+    uhrGrundStand(U.grundPruefen($("u_grund").value));
+    $("einstellungen").showModal();
+    $("uhr_titel").scrollIntoView({ block: "start" });
+    $("u_grund").focus();
+    $("u_grund").select();
+  };
+  if (location.hash === "#grundumsatz") {
+    history.replaceState(null, "", location.pathname + location.search);
+    window.bauchUhrGrund();
+  }
 }
 
 function tagSetzen(d) {

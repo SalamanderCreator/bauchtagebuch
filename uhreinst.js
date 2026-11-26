@@ -26,7 +26,9 @@ export const GRUPPEN = [
     z("hitzeab", "Hitze-Zuschlag ab", 25, 10, 45, "°C"),
     z("hitzeprozent", "Hitze-Zuschlag je angefangene 3 °C", 10, 0, 50, "%"),
     z("hitzemax", "Hitze-Zuschlag höchstens", 50, 0, 200, "%"),
-    u("wachvon", "Wach von", "06:00"), u("wachbis", "Wach bis", "22:00"),
+  ] },
+  { titel: "Schlafenszeit", hinweis: "Die Uhr ruft dann nichts ab und erinnert nicht ans Trinken. Die Trinkmenge verteilt sich auf die Zeit dazwischen.", felder: [
+    u("wachbis", "Schlafenszeit ab", "22:00"), u("wachvon", "Schlafenszeit bis", "06:00"),
   ] },
   { titel: "Trinkerinnerung", felder: [
     { id: "erinnerung", art: "schalter", text: "Trinkerinnerung an", std: true },
@@ -81,7 +83,7 @@ export function pruefen(roh) {
   if (!fehler.length) {
     const t = ["e1zeit", "e2zeit", "e3zeit", "e4zeit"].map((k) => minute(werte[k]));
     if (!t.every((x, i) => i === 0 || t[i - 1] < x)) fehler.push("Die vier Freigaben müssen zeitlich nacheinander liegen.");
-    if (minute(werte.wachvon) >= minute(werte.wachbis)) fehler.push("„Wach von“ muss vor „Wach bis“ liegen.");
+    if (minute(werte.wachvon) >= minute(werte.wachbis)) fehler.push("Die Schlafenszeit muss abends beginnen und morgens enden (Ende früher am Tag als Beginn).");
     const summe = werte.e1anteil + werte.e2anteil + werte.e3anteil + werte.e4anteil;
     if (summe <= 0) fehler.push("Die Anteile der Freigaben dürfen nicht alle 0 sein.");
     else if (summe !== 100) hinweise.push(`Die Anteile ergeben ${summe} % – die Uhr rechnet sie auf 100 % um.`);

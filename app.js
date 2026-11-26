@@ -881,7 +881,14 @@ function uhrEinstFormular() {
       l.append(f.text + (f.einheit ? ` (${f.einheit})` : "") + " ", feld);
       raster.append(l);
     }
-    box.append(h, raster);
+    box.append(h);
+    if (g.hinweis) {
+      const p = document.createElement("p");
+      p.className = "hinweis";
+      p.textContent = g.hinweis;
+      box.append(p);
+    }
+    box.append(raster);
   }
 }
 

@@ -79,6 +79,13 @@ export async function grundLaden() {
   grund = grundPruefen(e.grund);
   einst = e.einst && typeof e.einst === "object" ? e.einst : null;
   einstStand = Number(e.einstStand) || 0;
+  // Seit 26.11.2026 vier Freigaben: alte Einstellungen (drei) einmal auf 10:00 / 12:00 / 16:00 / 18:30 umstellen
+  if (einst && einst.e4zeit === undefined) {
+    einst = { ...einst, e1zeit: "10:00", e1anteil: 20, e2zeit: "12:00", e2anteil: 30, e3zeit: "16:00", e3anteil: 15,
+      e4zeit: "18:30", e4anteil: 35 };
+    einstStand = Math.floor(Date.now() / 1000);
+    await S.einstellung("uhr", { grund, einst, einstStand });
+  }
   return grund;
 }
 

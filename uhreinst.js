@@ -14,9 +14,10 @@ export const GRUPPEN = [
   { titel: "Kalorienbudget", felder: [
     z("defizit", "Geplantes Defizit", 200, -1000, 1500, "kcal/Tag"),
     z("aktivfaktor", "Aktivfaktor (angerechneter Anteil der Aktivkalorien)", 70, 0, 150, "%"),
-    u("e1zeit", "1. Freigabe ab", "06:00"), z("e1anteil", "1. Freigabe Anteil", 25, 0, 100, "%"),
-    u("e2zeit", "2. Freigabe ab", "12:00"), z("e2anteil", "2. Freigabe Anteil", 40, 0, 100, "%"),
-    u("e3zeit", "3. Freigabe ab", "17:30"), z("e3anteil", "3. Freigabe Anteil", 35, 0, 100, "%"),
+    u("e1zeit", "1. Freigabe ab", "10:00"), z("e1anteil", "1. Freigabe Anteil", 20, 0, 100, "%"),
+    u("e2zeit", "2. Freigabe ab", "12:00"), z("e2anteil", "2. Freigabe Anteil", 30, 0, 100, "%"),
+    u("e3zeit", "3. Freigabe ab", "16:00"), z("e3anteil", "3. Freigabe Anteil", 15, 0, 100, "%"),
+    u("e4zeit", "4. Freigabe ab", "18:30"), z("e4anteil", "4. Freigabe Anteil", 35, 0, 100, "%"),
     z("rotab", "Rot ab (frei unter minus)", 200, 0, 2000, "kcal"),
   ] },
   { titel: "Trinken", felder: [
@@ -78,10 +79,10 @@ export function pruefen(roh) {
   }
   werte.felder = felder.join(",");
   if (!fehler.length) {
-    const t = ["e1zeit", "e2zeit", "e3zeit"].map((k) => minute(werte[k]));
-    if (!(t[0] < t[1] && t[1] < t[2])) fehler.push("Die drei Freigaben müssen zeitlich nacheinander liegen.");
+    const t = ["e1zeit", "e2zeit", "e3zeit", "e4zeit"].map((k) => minute(werte[k]));
+    if (!t.every((x, i) => i === 0 || t[i - 1] < x)) fehler.push("Die vier Freigaben müssen zeitlich nacheinander liegen.");
     if (minute(werte.wachvon) >= minute(werte.wachbis)) fehler.push("„Wach von“ muss vor „Wach bis“ liegen.");
-    const summe = werte.e1anteil + werte.e2anteil + werte.e3anteil;
+    const summe = werte.e1anteil + werte.e2anteil + werte.e3anteil + werte.e4anteil;
     if (summe <= 0) fehler.push("Die Anteile der Freigaben dürfen nicht alle 0 sein.");
     else if (summe !== 100) hinweise.push(`Die Anteile ergeben ${summe} % – die Uhr rechnet sie auf 100 % um.`);
   }
